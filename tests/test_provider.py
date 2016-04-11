@@ -15,7 +15,7 @@ from se_leg_op.authz_state import AuthorizationState, InvalidAccessToken
 from se_leg_op.access_token import BearerTokenError
 from se_leg_op.client_authentication import InvalidClientAuthentication
 from se_leg_op.provider import Provider, InvalidAuthenticationRequest, AuthorizationError, InvalidTokenRequest, \
-    InvalidUserinfoRequest
+    InvalidUserinfoRequest, should_fragment_encode
 from se_leg_op.subject_identifier import HashBasedSubjectIdentifierFactory
 from se_leg_op.userinfo import Userinfo
 
@@ -93,23 +93,26 @@ class TestProviderParseAuthenticationRequest(object):
         received_request = self.provider.parse_authentication_request(urlencode(self.authn_request_args))
         assert received_request.to_dict() == self.authn_request_args
 
-    @pytest.mark.parametrize('parameter_to_delete, expected_exception', [
-        ('scope', MissingRequiredValue),
-        ('redirect_uri', MissingRequiredAttribute),
+    def test_reject_request_with_missing_required_parameter(self):
+        del self.authn_request_args['redirect_uri']
 
-    ])
-    def test_reject_invalid_request(self, parameter_to_delete, expected_exception):
-        del self.authn_request_args[parameter_to_delete]
         with pytest.raises(InvalidAuthenticationRequest) as exc:
             self.provider.parse_authentication_request(urlencode(self.authn_request_args))
-        assert isinstance(exc.value.__cause__, expected_exception)
+        assert isinstance(exc.value.__cause__, MissingRequiredAttribute)
+
+    def test_reject_request_with_wrong_scope(self):
+        self.authn_request_args['scope'] = 'foobar' # does not contain 'openid'
+
+        with pytest.raises(InvalidAuthenticationRequest) as exc:
+            self.provider.parse_authentication_request(urlencode(self.authn_request_args))
+        assert isinstance(exc.value.__cause__, MissingRequiredValue)
 
     def test_custom_validation_hook_reject(self):
         class TestException(Exception):
             pass
 
         def fail_all_requests(auth_req):
-            raise InvalidAuthenticationRequest() from TestException()
+            raise InvalidAuthenticationRequest("Test exception", auth_req) from TestException()
 
         self.provider.authentication_request_validators.append(fail_all_requests)
         with pytest.raises(InvalidAuthenticationRequest) as exc:
@@ -353,3 +356,25 @@ class TestProviderProviderConfiguration(object):
         config = {'foo': 'bar', 'abc': 'xyz'}
         provider = Provider(None, config, None, None, None)
         assert provider.provider_configuration == config
+
+
+class TestShouldFragmentEncode(object):
+    def test_explicit_fragment_encode_despite_code_flow(self):
+        auth_req = {'response_mode': 'fragment', 'response_type': 'code'}
+        assert should_fragment_encode(auth_req) is True
+
+    def test_explicit_query_encode_despite_implicit_flow(self):
+        auth_req = {'response_mode': 'query', 'response_type': 'id_token'}
+        assert should_fragment_encode(auth_req) is False
+
+    @pytest.mark.parametrize('response_type, expected', [
+        ('code', False),
+        ('id_token', True),
+        ('id_token token', True),
+        ('code id_token', True),
+        ('code token', True),
+        ('code id_token token', True),
+    ])
+    def test_by_response_type(self, response_type, expected):
+        auth_req = {'response_type': response_type}
+        assert should_fragment_encode(AuthorizationRequest(**auth_req)) is expected

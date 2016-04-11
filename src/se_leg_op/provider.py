@@ -7,6 +7,7 @@ from urllib.parse import urlparse
 
 from jwkest import jws
 from oic.oauth2.message import MissingRequiredAttribute
+from oic.oauth2.message import ErrorResponse
 from oic.oauth2.message import MissingRequiredValue
 from oic.oic import scope2claims
 from oic.oic.message import AccessTokenRequest
@@ -24,7 +25,18 @@ logger = logging.getLogger(__name__)
 
 
 class InvalidAuthenticationRequest(ValueError):
-    pass
+    def __init__(self, message, parsed_request, oauth_error=None):
+        super().__init__(message)
+        self.request = parsed_request
+        self.oauth_error = oauth_error
+
+    def to_error_url(self):
+        redirect_uri = self.request.get('redirect_uri')
+        if redirect_uri and self.oauth_error:
+            error_resp = ErrorResponse(error=self.oauth_error, error_message=str(self))
+            return error_resp.request(redirect_uri, should_fragment_encode(self.request))
+
+        return None
 
 
 class AuthorizationError(Exception):
@@ -39,6 +51,20 @@ class InvalidUserinfoRequest(ValueError):
     pass
 
 
+def should_fragment_encode(authentication_request):
+    if authentication_request.get('response_mode') == 'fragment':
+        # explicitly requested fragment encoding
+        return True
+    elif authentication_request.get('response_mode') == 'query':
+        # explicitly requested fragment encoding
+        return False
+    elif authentication_request['response_type'] == ['code']:
+        # not implicit or hybrid flow
+        return False
+
+    return True
+
+
 def _authorization_request_verify(authentication_request):
     """
     Verifies that all required parameters and correct values are included in the authentication request.
@@ -48,7 +74,7 @@ def _authorization_request_verify(authentication_request):
     try:
         authentication_request.verify()
     except (MissingRequiredValue, MissingRequiredAttribute) as e:
-        raise InvalidAuthenticationRequest() from e
+        raise InvalidAuthenticationRequest(str(e), authentication_request, oauth_error='invalid_request') from e
 
 
 def _client_id_is_known(clients, authentication_request):
@@ -59,7 +85,9 @@ def _client_id_is_known(clients, authentication_request):
     :raise InvalidAuthenticationRequest: if the client_id is unknown
     """
     if authentication_request['client_id'] not in clients:
-        raise InvalidAuthenticationRequest('Unknown client_id \'{}\''.format(authentication_request['client_id']))
+        raise InvalidAuthenticationRequest('Unknown client_id \'{}\''.format(authentication_request['client_id']),
+                                           authentication_request,
+                                           oauth_error='unauthorized_client')
 
 
 def _redirect_uri_is_in_registered_redirect_uris(clients, authentication_request):
@@ -72,7 +100,8 @@ def _redirect_uri_is_in_registered_redirect_uris(clients, authentication_request
     allowed_redirect_uris = clients[authentication_request['client_id']]['redirect_uris']
     if authentication_request['redirect_uri'] not in allowed_redirect_uris:
         raise InvalidAuthenticationRequest('Redirect uri \'{}\' is not registered'.format(
-                authentication_request['redirect_uri']))
+                authentication_request['redirect_uri']),
+                authentication_request)
 
 
 def _response_type_is_in_registered_response_types(clients, authentication_request):
@@ -85,7 +114,9 @@ def _response_type_is_in_registered_response_types(clients, authentication_reque
     allowed_response_types = clients[authentication_request['client_id']]['response_types']
     if frozenset(authentication_request['response_type']) not in {frozenset(rt) for rt in allowed_response_types}:
         raise InvalidAuthenticationRequest(
-                'Response type \'{}\' is not registered'.format(' '.join(authentication_request['response_type'])))
+                'Response type \'{}\' is not registered'.format(' '.join(authentication_request['response_type'])),
+                authentication_request,
+                oauth_error='invalid_request')
 
 
 def _userinfo_claims_only_specified_when_access_token_is_issued(authentication_request):
@@ -101,7 +132,9 @@ def _userinfo_claims_only_specified_when_access_token_is_issued(authentication_r
     contains_userinfo_claims_request = 'claims' in authentication_request and 'userinfo' in authentication_request[
         'claims']
     if not will_issue_access_token and contains_userinfo_claims_request:
-        raise InvalidAuthenticationRequest('Userinfo claims cannot be requested, when response_type=\'id_token\'')
+        raise InvalidAuthenticationRequest('Userinfo claims cannot be requested, when response_type=\'id_token\'',
+                                           authentication_request,
+                                           oauth_error='invalid_request')
 
 
 class Provider(object):
@@ -358,7 +391,7 @@ class Provider(object):
         try:
             token_request.verify()
         except (MissingRequiredValue, MissingRequiredAttribute) as e:
-            raise InvalidTokenRequest() from e
+            raise InvalidTokenRequest(str(e)) from e
 
         authentication_request = self.authz_state.get_authorization_request_for_code(token_request['code'])
 
@@ -401,7 +434,7 @@ class Provider(object):
         try:
             token_request.verify()
         except (MissingRequiredValue, MissingRequiredAttribute) as e:
-            raise InvalidTokenRequest() from e
+            raise InvalidTokenRequest(str(e)) from e
 
         response = AccessTokenResponse()
 
@@ -437,7 +470,7 @@ class Provider(object):
         try:
             bearer_token = extract_bearer_token_from_http_request(request, http_headers)
         except BearerTokenError as e:
-            raise InvalidUserinfoRequest() from e
+            raise InvalidUserinfoRequest(str(e)) from e
 
         introspection = self.authz_state.introspect_access_token(bearer_token)
         if not introspection['active']:
