@@ -77,41 +77,41 @@ def _authorization_request_verify(authentication_request):
         raise InvalidAuthenticationRequest(str(e), authentication_request, oauth_error='invalid_request') from e
 
 
-def _client_id_is_known(clients, authentication_request):
+def _client_id_is_known(provider, authentication_request):
     """
     Verifies the client identifier is known.
-    :param clients: clients db
+    :param provider: provider instance
     :param authentication_request: the authentication request to verify
     :raise InvalidAuthenticationRequest: if the client_id is unknown
     """
-    if authentication_request['client_id'] not in clients:
+    if authentication_request['client_id'] not in provider.clients:
         raise InvalidAuthenticationRequest('Unknown client_id \'{}\''.format(authentication_request['client_id']),
                                            authentication_request,
                                            oauth_error='unauthorized_client')
 
 
-def _redirect_uri_is_in_registered_redirect_uris(clients, authentication_request):
+def _redirect_uri_is_in_registered_redirect_uris(provider, authentication_request):
     """
     Verifies the redirect uri is registered for the client making the request.
-    :param clients: clients db
+    :param provider: provider instance
     :param authentication_request: authentication request to verify
     :raise InvalidAuthenticationRequest: if the redirect uri is not registered
     """
-    allowed_redirect_uris = clients[authentication_request['client_id']]['redirect_uris']
+    allowed_redirect_uris = provider.clients[authentication_request['client_id']]['redirect_uris']
     if authentication_request['redirect_uri'] not in allowed_redirect_uris:
         raise InvalidAuthenticationRequest('Redirect uri \'{}\' is not registered'.format(
                 authentication_request['redirect_uri']),
                 authentication_request)
 
 
-def _response_type_is_in_registered_response_types(clients, authentication_request):
+def _response_type_is_in_registered_response_types(provider, authentication_request):
     """
     Verifies that the requested response type is allowed for the client making the request.
-    :param clients: clients db
+    :param provider: provider instance
     :param authentication_request: authentication request to verify
     :raise InvalidAuthenticationRequest: if the response type is not allowed
     """
-    allowed_response_types = clients[authentication_request['client_id']]['response_types']
+    allowed_response_types = provider.clients[authentication_request['client_id']]['response_types']
     if frozenset(authentication_request['response_type']) not in {frozenset(rt) for rt in allowed_response_types}:
         raise InvalidAuthenticationRequest(
                 'Response type \'{}\' is not registered'.format(' '.join(authentication_request['response_type'])),
@@ -168,11 +168,11 @@ class Provider(object):
 
         self.authentication_request_validators.append(_authorization_request_verify)
         self.authentication_request_validators.append(
-                functools.partial(_client_id_is_known, self.clients))
+                functools.partial(_client_id_is_known, self))
         self.authentication_request_validators.append(
-                functools.partial(_redirect_uri_is_in_registered_redirect_uris, self.clients))
+                functools.partial(_redirect_uri_is_in_registered_redirect_uris, self))
         self.authentication_request_validators.append(
-                functools.partial(_response_type_is_in_registered_response_types, self.clients))
+                functools.partial(_response_type_is_in_registered_response_types, self))
         self.authentication_request_validators.append(_userinfo_claims_only_specified_when_access_token_is_issued)
 
     @property
