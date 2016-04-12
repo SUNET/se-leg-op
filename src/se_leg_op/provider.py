@@ -139,6 +139,16 @@ def _userinfo_claims_only_specified_when_access_token_is_issued(authentication_r
                                            oauth_error='invalid_request')
 
 
+def _requested_scope_is_supported(provider, authentication_request):
+    requested_scopes = set(authentication_request['scope'])
+    supported_scopes = set(provider.provider_configuration['scopes_supported'])
+    requested_unsupported_scopes = requested_scopes - supported_scopes
+    if requested_unsupported_scopes:
+        raise InvalidAuthenticationRequest('Request contains unsupported/unknown scopes: {}'
+                                           .format(', '.join(requested_unsupported_scopes)),
+                                           authentication_request, oauth_error='invalid_scope')
+
+
 class Provider(object):
     def __init__(self, signing_key, configuration_information, authz_state, clients, userinfo, *,
                  id_token_lifetime=3600):
@@ -160,6 +170,8 @@ class Provider(object):
             self.configuration_information['subject_types_supported'] = ['pairwise', 'public']
         if 'id_token_signing_alg_values_supported' not in configuration_information:
             self.configuration_information['id_token_signing_alg_values_supported'] = ['RS256']
+        if 'scopes_supported' not in configuration_information:
+            self.configuration_information['scopes_supported'] = ['openid']
 
         self.authz_state = authz_state
         self.clients = clients
@@ -176,6 +188,7 @@ class Provider(object):
         self.authentication_request_validators.append(
                 functools.partial(_response_type_is_in_registered_response_types, self))
         self.authentication_request_validators.append(_userinfo_claims_only_specified_when_access_token_is_issued)
+        self.authentication_request_validators.append(functools.partial(_requested_scope_is_supported, self))
 
     @property
     def provider_configuration(self):
