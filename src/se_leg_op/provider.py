@@ -44,7 +44,9 @@ class AuthorizationError(Exception):
 
 
 class InvalidTokenRequest(ValueError):
-    pass
+    def __init__(self, message, oauth_error='invalid_request'):
+        super().__init__(message)
+        self.oauth_error = oauth_error
 
 
 class InvalidUserinfoRequest(ValueError):
@@ -384,7 +386,8 @@ class Provider(object):
         elif token_request['grant_type'] == 'refresh_token':
             return self._do_token_refresh(token_request)
 
-        raise InvalidTokenRequest('grant_type \'{}\' unknown'.format(token_request['grant_type']))
+        raise InvalidTokenRequest('grant_type \'{}\' unknown'.format(token_request['grant_type']),
+                                  oauth_error='unsupported_grant_type')
 
     def _do_code_exchange(self, request, extra_id_token_claims=None):
         # type: (Dict[str, str], Optional[Mapping[str, Union[str, List[str]]]]) -> oic.message.AccessTokenResponse
