@@ -505,10 +505,7 @@ class Provider(object):
         :param request: urlencoded request (either query string or POST body)
         :param http_headers: http headers
         """
-        try:
-            bearer_token = extract_bearer_token_from_http_request(request, http_headers)
-        except BearerTokenError as e:
-            raise InvalidUserinfoRequest(str(e)) from e
+        bearer_token = extract_bearer_token_from_http_request(request, http_headers)
 
         introspection = self.authz_state.introspect_access_token(bearer_token)
         if not introspection['active']:

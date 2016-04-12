@@ -361,10 +361,8 @@ class TestProviderHandleUserinfoRequest(object):
         assert response.to_dict() == self.provider.userinfo[TEST_USER_ID]
 
     def test_handle_userinfo_rejects_request_missing_access_token(self):
-        with pytest.raises(InvalidUserinfoRequest) as exc:
+        with pytest.raises(BearerTokenError) as exc:
             self.provider.handle_userinfo_request()
-
-        assert isinstance(exc.value.__cause__, BearerTokenError)
 
     def test_handle_userinfo_rejects_invalid_access_token(self):
         access_token = self.create_access_token()
