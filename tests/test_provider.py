@@ -358,7 +358,11 @@ class TestProviderHandleUserinfoRequest(object):
         claims_request = ClaimsRequest(userinfo=Claims(email=None))
         access_token = self.create_access_token({'scope': 'openid profile', 'claims': claims_request})
         response = self.provider.handle_userinfo_request(urlencode({'access_token': access_token}))
+
+        response_sub = response['sub']
+        del response['sub']
         assert response.to_dict() == self.provider.userinfo[TEST_USER_ID]
+        assert self.provider.authz_state.get_user_id_for_subject_identifier(response_sub) == TEST_USER_ID
 
     def test_handle_userinfo_rejects_request_missing_access_token(self):
         with pytest.raises(BearerTokenError) as exc:

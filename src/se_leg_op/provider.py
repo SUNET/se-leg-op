@@ -518,7 +518,7 @@ class Provider(object):
         requested_claims.update(self._get_requested_claims_in(authentication_request, 'userinfo'))
         user_claims = self.userinfo.get_claims_for(user_id, requested_claims)
 
-        response = OpenIDSchema(**user_claims)
+        response = OpenIDSchema(sub=introspection['sub'], **user_claims)
         logger.debug('userinfo=%s from requested_claims=%s userinfo=%s extra_claims=%s',
                      OpenIDSchema(**user_claims), requested_claims, user_claims)
         return response
