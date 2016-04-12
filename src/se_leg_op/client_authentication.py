@@ -20,11 +20,15 @@ def verify_client_authentication(parsed_request, clients, authz_header=None):
     client_id = None
     client_secret = None
     authn_method = None
-    if authz_header and authz_header.startswith('Basic '):
-        authn_method = 'client_secret_basic'
-        credentials = authz_header[len('Basic '):]
-        auth = base64.urlsafe_b64decode(credentials.encode('utf-8')).decode('utf-8')
-        client_id, client_secret = auth.split(':')
+    if authz_header:
+        authz_scheme = authz_header.split(maxsplit=1)[0]
+        if authz_scheme == 'Basic':
+            authn_method = 'client_secret_basic'
+            credentials = authz_header[len('Basic '):]
+            auth = base64.urlsafe_b64decode(credentials.encode('utf-8')).decode('utf-8')
+            client_id, client_secret = auth.split(':')
+        else:
+            raise InvalidClientAuthentication('Unknown scheme in authorization header, {} != Basic'.format(authz_scheme))
     elif 'client_id' in parsed_request:
         client_id = parsed_request['client_id']
         if 'client_secret' in parsed_request:

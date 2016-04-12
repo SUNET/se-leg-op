@@ -73,3 +73,9 @@ class TestVerifyClientAuthentication(object):
 
         parsed_request = verify_client_authentication(self.token_request_args, self.clients, None)
         assert parsed_request == self.token_request_args
+
+    def test_invalid_authorization_scheme(self):
+        authz_header = self.create_basic_auth()
+        with pytest.raises(InvalidClientAuthentication):
+            verify_client_authentication(self.token_request_args, self.clients,
+                                         authz_header.replace('Basic', 'invalid'))
