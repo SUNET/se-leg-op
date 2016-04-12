@@ -25,8 +25,7 @@ TEST_REDIRECT_URI = 'https://client.example.com'
 ISSUER = 'https://provider.example.com'
 TEST_USER_ID = 'user1'
 
-MOCK_TIME = Mock()
-MOCK_TIME.return_value = time.mktime(dt.datetime(2016, 6, 21).timetuple())
+MOCK_TIME = Mock(return_value=time.mktime(dt.datetime(2016, 6, 21).timetuple()))
 
 
 def rsa_key():
@@ -375,7 +374,7 @@ class TestProviderHandleUserinfoRequest(object):
 
 
 class TestProviderProviderConfiguration(object):
-    def test_discovery_endpoint(self):
+    def test_provider_configuration(self):
         config = {'foo': 'bar', 'abc': 'xyz'}
         provider = Provider(None, config, None, None, None)
         assert provider.provider_configuration == config

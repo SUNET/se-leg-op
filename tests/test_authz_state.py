@@ -14,9 +14,7 @@ from se_leg_op.authz_state import InvalidRefreshToken
 from se_leg_op.authz_state import InvalidSubjectIdentifier
 from se_leg_op.subject_identifier import HashBasedSubjectIdentifierFactory
 
-MOCK_TIME = Mock()
-MOCK_TIME.return_value = time.mktime(dt.datetime(2016, 6, 21).timetuple())
-
+MOCK_TIME = Mock(return_value=time.mktime(dt.datetime(2016, 6, 21).timetuple()))
 INVALID_INPUT = [None, '', 'noexist']
 
 
