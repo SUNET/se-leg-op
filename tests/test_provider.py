@@ -158,6 +158,18 @@ class TestProviderAuthorize(object):
         assert resp['code'] in self.provider.authz_state.authorization_codes
         assert resp['state'] == self.authn_request_args['state']
 
+    @patch('time.time', MOCK_TIME)
+    @pytest.mark.parametrize('extra_claims', [
+        {'foo': 'bar'},
+        lambda user_id, client_id: {'foo': 'bar'}
+    ])
+    def test_authorize_with_extra_id_token_claims(self, extra_claims):
+        self.authn_request_args['response_type'] = ['id_token'] # make sure ID Token is produced
+        auth_req = AuthorizationRequest().from_dict(self.authn_request_args)
+        resp = self.provider.authorize(auth_req, TEST_USER_ID, extra_claims)
+        id_token = assert_id_token_base_claims(resp['id_token'], self.provider.signing_key, self.provider, auth_req)
+        assert id_token['foo'] == 'bar'
+
     def test_authorize_include_user_claims_from_scope_in_id_token_if_no_userinfo_req_can_be_made(self):
         self.authn_request_args['response_type'] = 'id_token'
         self.authn_request_args['scope'] = 'openid profile'
@@ -270,10 +282,14 @@ class TestProviderHandleTokenRequest(object):
         assert id_token['email'] == self.provider.userinfo[TEST_USER_ID]['email']
 
     @patch('time.time', MOCK_TIME)
-    def test_handle_token_request_with_extra_id_token_claims(self):
+    @pytest.mark.parametrize('extra_claims', [
+        {'foo': 'bar'},
+        lambda user_id, client_id: {'foo': 'bar'}
+    ])
+    def test_handle_token_request_with_extra_id_token_claims(self, extra_claims):
         self.authorization_code_exchange_request_args['code'] = self.create_authz_code()
         response = self.provider.handle_token_request(urlencode(self.authorization_code_exchange_request_args),
-                                                      extra_id_token_claims={'foo': 'bar'})
+                                                      extra_id_token_claims=extra_claims)
         assert response['access_token'] in self.provider.authz_state.access_tokens
         id_token = assert_id_token_base_claims(response['id_token'], self.provider.signing_key, self.provider,
                                                self.authn_request_args)

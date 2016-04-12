@@ -223,16 +223,15 @@ class Provider(object):
         logger.debug('parsed authentication_request: %s', auth_req)
         return auth_req
 
-    def authorize(self, authentication_request, user_id, extra_id_token_claims=None):
-        # type: (oic.oic.message.AuthorizationRequest, str, Optional[Mapping[str, Union[str, List]]])
-        #        -> oic.oic.message.AuthorizationResponse
+    def authorize(self, authentication_request, # type: oic.oic.message.AuthorizationRequest
+                  user_id, # type: str
+                  extra_id_token_claims=None # type: Optional[Union[Mapping[str, Union[str, List[str]]], Callable[[str, str], Mapping[str, Union[str, List[str]]]]]
+                  ):
+        # type: (...) -> oic.oic.message.AuthorizationResponse
         """
         Creates an Authentication Response for the specified authentication request and local identifier of the
         authenticated user.
         """
-        if extra_id_token_claims is None:
-            extra_id_token_claims = {}
-
         sub = self._create_subject_identifier(user_id, authentication_request['client_id'],
                                               authentication_request['redirect_uri'])
         self._check_subject_identifier_matches_requested(authentication_request, sub)
@@ -250,6 +249,11 @@ class Provider(object):
             self._add_access_token_to_response(response, access_token)
 
         if 'id_token' in authentication_request['response_type']:
+            if extra_id_token_claims is None:
+                extra_id_token_claims = {}
+            elif callable(extra_id_token_claims):
+                extra_id_token_claims = extra_id_token_claims(user_id, authentication_request['client_id'])
+
             requested_claims = self._get_requested_claims_in(authentication_request, 'id_token')
             if len(authentication_request['response_type']) == 1:
                 # only id token is issued -> no way of doing userinfo request, so include all claims in ID Token,
@@ -381,8 +385,11 @@ class Provider(object):
                 raise AuthorizationError('Requested subject identifier \'{}\' could not be matched'
                                          .format(requested_sub))
 
-    def handle_token_request(self, request_body, http_headers=None, extra_id_token_claims=None):
-        # type: (str, Optional[Mapping[str, str]], Optional[Mapping[str, Union[str, List]]]) -> oic.oic.message.AccessTokenResponse
+    def handle_token_request(self, request_body, # type: str
+                             http_headers=None, # type: Optional[Mapping[str, str]]
+                             extra_id_token_claims=None # type: Optional[Union[Mapping[str, Union[str, List[str]]], Callable[[str, str], Mapping[str, Union[str, List[str]]]]]
+                             ):
+        # type: (...) -> oic.oic.message.AccessTokenResponse
         """
         Handles a token request, either for exchanging an authorization code or using a refresh token.
         :param request_body: urlencoded token request
@@ -402,13 +409,17 @@ class Provider(object):
         raise InvalidTokenRequest('grant_type \'{}\' unknown'.format(token_request['grant_type']),
                                   oauth_error='unsupported_grant_type')
 
-    def _do_code_exchange(self, request, extra_id_token_claims=None):
-        # type: (Dict[str, str], Optional[Mapping[str, Union[str, List[str]]]]) -> oic.message.AccessTokenResponse
+    def _do_code_exchange(self, request, # type: Dict[str, str]
+                          extra_id_token_claims=None # type: Optional[Union[Mapping[str, Union[str, List[str]]], Callable[[str, str], Mapping[str, Union[str, List[str]]]]]
+                          ):
+        # type: (...) -> oic.message.AccessTokenResponse
         """
         Handles a token request for exchanging an authorization code for an access token
         (grant_type=authorization_code).
         :param request: parsed http request parameters
-        :param extra_id_token_claims: any extra parameters to include in the signed ID Token
+        :param extra_id_token_claims: any extra parameters to include in the signed ID Token, either as a dict-like
+            object or as a callable object accepting the local user identifier and client identifier which returns
+            any extra claims which might depend on the user id and/or client id.
         :return: a token response containing a signed ID Token, an Access Token, and a Refresh Token
         :raise InvalidTokenRequest: if the token request is invalid
         """
@@ -435,6 +446,8 @@ class Provider(object):
 
         if extra_id_token_claims is None:
             extra_id_token_claims = {}
+        elif callable(extra_id_token_claims):
+            extra_id_token_claims = extra_id_token_claims(user_id, authentication_request['client_id'])
         requested_claims = self._get_requested_claims_in(authentication_request, 'id_token')
         user_claims = self.userinfo.get_claims_for(user_id, requested_claims)
         response['id_token'] = self._create_signed_id_token(authentication_request['client_id'], sub,
