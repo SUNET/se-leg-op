@@ -358,6 +358,12 @@ class TestProviderProviderConfiguration(object):
         assert provider.provider_configuration == config
 
 
+class TestProviderJWKS(object):
+    def test_jwks(self):
+        provider = Provider(rsa_key(), {}, None, None, None)
+        assert provider.jwks == {'keys': [provider.signing_key.serialize()]}
+
+
 class TestShouldFragmentEncode(object):
     def test_explicit_fragment_encode_despite_code_flow(self):
         auth_req = {'response_mode': 'fragment', 'response_type': 'code'}

@@ -182,6 +182,15 @@ class Provider(object):
         """
         return copy.deepcopy(self.configuration_information)
 
+    @property
+    def jwks(self):
+        """
+        All keys published by the provider as JSON Web Key Set.
+        """
+
+        keys = [self.signing_key.serialize()]
+        return {'keys': keys}
+
     def parse_authentication_request(self, request_body, http_headers=None):
         # type: (str, Optional[Mapping[str, str]]) -> oic.oic.message.AuthorizationRequest
         """
