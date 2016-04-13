@@ -44,7 +44,7 @@ def extract_bearer_token_from_http_request(request=None, http_headers=None):
             URI Query Parameter: https://tools.ietf.org/html/rfc6750#section-2.3
             """
             access_token = parsed_request['access_token']
-            logger.debug('found access token %s in reques••t', access_token)
+            logger.debug('found access token %s in request', access_token)
             return access_token
 
     raise BearerTokenError('Bearer Token could not be found in the request')

@@ -163,7 +163,7 @@ class TestProviderAuthorize(object):
         lambda user_id, client_id: {'foo': 'bar'}
     ])
     def test_authorize_with_extra_id_token_claims(self, extra_claims):
-        self.authn_request_args['response_type'] = ['id_token'] # make sure ID Token is produced
+        self.authn_request_args['response_type'] = ['id_token']  # make sure ID Token is produced
         auth_req = AuthorizationRequest().from_dict(self.authn_request_args)
         resp = self.provider.authorize(auth_req, TEST_USER_ID, extra_claims)
         id_token = assert_id_token_base_claims(resp['id_token'], self.provider.signing_key, self.provider, auth_req)
