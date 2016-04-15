@@ -15,7 +15,8 @@ from se_leg_op.authz_state import AuthorizationState, InvalidAccessToken
 from se_leg_op.access_token import BearerTokenError
 from se_leg_op.client_authentication import InvalidClientAuthentication
 from se_leg_op.provider import Provider, InvalidAuthenticationRequest, AuthorizationError, InvalidTokenRequest, \
-    InvalidUserinfoRequest, should_fragment_encode
+    InvalidUserinfoRequest, should_fragment_encode, _redirect_uri_is_in_registered_redirect_uris, \
+    _response_type_is_in_registered_response_types
 from se_leg_op.subject_identifier import HashBasedSubjectIdentifierFactory
 from se_leg_op.userinfo import Userinfo
 
@@ -44,7 +45,7 @@ def assert_id_token_base_claims(jws, verification_key, provider, auth_req):
     return id_token
 
 
-@pytest.fixture()
+@pytest.fixture
 def auth_req_args(request):
     request.instance.authn_request_args = {
         'scope': 'openid',
@@ -147,6 +148,26 @@ class TestProviderParseAuthenticationRequest(object):
         self.authn_request_args['response_type'] = 'id_token'
         with pytest.raises(InvalidAuthenticationRequest):
             self.provider.parse_authentication_request(urlencode(self.authn_request_args))
+
+
+@pytest.mark.usefixtures('auth_req_args')
+class TestAuthenticationRequestValidators(object):
+    @pytest.fixture
+    def provider_mock(self):
+        provider = Mock()
+        provider.clients = Mock()
+        provider.clients.__getitem__ = Mock(return_value={})
+        return provider
+
+    def test_redirect_uri_is_in_registered_redirect_uris_with_no_redirect_uris(self, provider_mock):
+        auth_req = AuthorizationRequest().from_dict(self.authn_request_args)
+        with pytest.raises(InvalidAuthenticationRequest):
+            _redirect_uri_is_in_registered_redirect_uris(provider_mock, auth_req)
+
+    def test_response_type_is_in_registered_response_types_with_no_response_types(self, provider_mock):
+        auth_req = AuthorizationRequest().from_dict(self.authn_request_args)
+        with pytest.raises(InvalidAuthenticationRequest):
+            _response_type_is_in_registered_response_types(provider_mock, auth_req)
 
 
 @pytest.mark.usefixtures('inject_provider', 'auth_req_args')

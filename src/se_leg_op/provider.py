@@ -99,11 +99,17 @@ def _redirect_uri_is_in_registered_redirect_uris(provider, authentication_reques
     :param authentication_request: authentication request to verify
     :raise InvalidAuthenticationRequest: if the redirect uri is not registered
     """
-    allowed_redirect_uris = provider.clients[authentication_request['client_id']]['redirect_uris']
+    error = InvalidAuthenticationRequest('Redirect uri \'{}\' is not registered'.format(
+        authentication_request['redirect_uri']),
+        authentication_request)
+    try:
+        allowed_redirect_uris = provider.clients[authentication_request['client_id']]['redirect_uris']
+    except KeyError as e:
+        logger.error('client metadata is missing redirect_uris')
+        raise error
+
     if authentication_request['redirect_uri'] not in allowed_redirect_uris:
-        raise InvalidAuthenticationRequest('Redirect uri \'{}\' is not registered'.format(
-                authentication_request['redirect_uri']),
-                authentication_request)
+        raise error
 
 
 def _response_type_is_in_registered_response_types(provider, authentication_request):
@@ -113,12 +119,17 @@ def _response_type_is_in_registered_response_types(provider, authentication_requ
     :param authentication_request: authentication request to verify
     :raise InvalidAuthenticationRequest: if the response type is not allowed
     """
-    allowed_response_types = provider.clients[authentication_request['client_id']]['response_types']
+    error = InvalidAuthenticationRequest('Response type \'{}\' is not registered'.format(
+        ' '.join(authentication_request['response_type'])),
+        authentication_request, oauth_error='invalid_request')
+    try:
+        allowed_response_types = provider.clients[authentication_request['client_id']]['response_types']
+    except KeyError as e:
+        logger.error('client metadata is missing response_types')
+        raise error
+
     if frozenset(authentication_request['response_type']) not in {frozenset(rt) for rt in allowed_response_types}:
-        raise InvalidAuthenticationRequest(
-                'Response type \'{}\' is not registered'.format(' '.join(authentication_request['response_type'])),
-                authentication_request,
-                oauth_error='invalid_request')
+        raise error
 
 
 def _userinfo_claims_only_specified_when_access_token_is_issued(authentication_request):
