@@ -1,3 +1,4 @@
+import logging
 import shelve
 
 from flask.app import Flask
@@ -92,6 +93,8 @@ def oidc_provider_init_app(name=None):
 
     app.authn_requests = ShelveWrapper('authn_requests')
     app.users = ShelveWrapper('userinfo')
+
+    logging.basicConfig(level=logging.DEBUG)
 
     from .views.oidc_provider import oidc_provider_views
     app.register_blueprint(oidc_provider_views)
