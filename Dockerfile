@@ -46,5 +46,6 @@ RUN cd /op/src && \
 CMD ["start-stop-daemon", "--start", "-c", "se-leg:se-leg", "--exec", \
      "/op/env/bin/gunicorn", "--pidfile", "/var/run/se-leg-op.pid", \
      "--", \
-     "--bind", "0.0.0.0:5000", "se_leg_op.service.run:app" \
+     "--bind", "0.0.0.0:5000", "--chdir", "/tmp", \
+     "se_leg_op.service.run:app" \
      ]
