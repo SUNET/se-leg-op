@@ -6,8 +6,9 @@ import pytest
 import responses
 from oic.oic.message import AuthorizationResponse, AccessTokenResponse, OpenIDSchema
 
-from se_leg_op.service.app import SE_LEG_PROVIDER_SETTINGS_ENVVAR, ShelveWrapper
+from se_leg_op.service.app import SE_LEG_PROVIDER_SETTINGS_ENVVAR, MongoWrapper
 from se_leg_op.service.app import oidc_provider_init_app
+from se_leg_op.storage import MongoTemporaryInstance
 
 TEST_CLIENT_ID = 'client1'
 TEST_CLIENT_SECRET = 'my_secret'
@@ -20,7 +21,17 @@ TEST_NONCE = 'nonce'
 def inject_app(request, tmpdir):
     os.chdir(str(tmpdir))
     os.environ[SE_LEG_PROVIDER_SETTINGS_ENVVAR] = './app_config.py'
-    request.instance.app = oidc_provider_init_app(__name__)
+    mongodb = MongoTemporaryInstance()
+    config = {
+        '_mongodb': mongodb,
+        'DB_URI': mongodb.get_uri()
+    }
+    request.instance.app = oidc_provider_init_app(__name__, config=config)
+
+    def shutdown_mongodb():
+        mongodb.shutdown()
+
+    request.addfinalizer(shutdown_mongodb)
 
 
 @pytest.mark.usefixtures('inject_app', 'create_client_in_db')
@@ -88,9 +99,9 @@ class TestApp(object):
         return {'Authorization': 'Basic {}'.format(auth)}
 
     @pytest.fixture
-    def create_client_in_db(self, tmpdir):
-        client_db_path = os.path.join(str(tmpdir), 'clients')
-        client_db = ShelveWrapper(client_db_path)
+    def create_client_in_db(self, request):
+        db_uri = request.instance.app.config['DB_URI']
+        client_db = MongoWrapper(db_uri, 'se_leg_op', 'clients')
         client_db[TEST_CLIENT_ID] = {
             'redirect_uris': [TEST_REDIRECT_URI],
             'response_types': [['code'], ['code', 'id_token', 'token']],

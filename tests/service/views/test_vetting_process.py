@@ -5,7 +5,8 @@ import pytest
 import responses
 from oic.oic.message import AuthorizationRequest
 
-from se_leg_op.service.app import oidc_provider_init_app, SE_LEG_PROVIDER_SETTINGS_ENVVAR, ShelveWrapper
+from se_leg_op.service.app import oidc_provider_init_app, SE_LEG_PROVIDER_SETTINGS_ENVVAR, MongoWrapper
+from se_leg_op.storage import MongoTemporaryInstance
 
 TEST_CLIENT_ID = 'client1'
 TEST_CLIENT_SECRET = 'secret'
@@ -18,7 +19,17 @@ TEST_USER_ID = 'user1'
 def inject_app(request, tmpdir):
     os.chdir(str(tmpdir))
     os.environ[SE_LEG_PROVIDER_SETTINGS_ENVVAR] = './app_config.py'
-    request.instance.app = oidc_provider_init_app(__name__)
+    mongodb = MongoTemporaryInstance()
+    config = {
+        '_mongodb': mongodb,
+        'DB_URI': mongodb.get_uri()
+    }
+    request.instance.app = oidc_provider_init_app(__name__, config=config)
+
+    def shutdown_mongodb():
+        mongodb.shutdown()
+
+    request.addfinalizer(shutdown_mongodb)
 
 
 @pytest.fixture
@@ -36,9 +47,9 @@ def authn_request_args():
 @pytest.mark.usefixtures('inject_app', 'create_client_in_db')
 class TestVettingResultEndpoint(object):
     @pytest.fixture
-    def create_client_in_db(self, tmpdir):
-        client_db_path = os.path.join(str(tmpdir), 'clients')
-        client_db = ShelveWrapper(client_db_path)
+    def create_client_in_db(self, request):
+        db_uri = request.instance.app.config['DB_URI']
+        client_db = MongoWrapper(db_uri, 'se_leg_op', 'clients')
         client_db[TEST_CLIENT_ID] = {
             'redirect_uris': [TEST_REDIRECT_URI],
             'client_secret': TEST_CLIENT_SECRET,
@@ -50,7 +61,7 @@ class TestVettingResultEndpoint(object):
     def test_vetting_endpoint(self, authn_request_args):
         responses.add(responses.GET, TEST_REDIRECT_URI, status=200)
         nonce = authn_request_args['nonce']
-        self.app.authn_requests[nonce] = AuthorizationRequest(**authn_request_args)
+        self.app.authn_requests[nonce] = authn_request_args
 
         resp = self.app.test_client().post('/vetting-result', data={'nonce': nonce,
                                                                     'identity': TEST_USER_ID})
