@@ -1,10 +1,10 @@
 import logging
-import shelve
 
 from flask.app import Flask
 from flask.helpers import url_for
 from jwkest.jwk import RSAKey, import_rsa_key
 
+from ..storage import MongoWrapper
 from ..authz_state import AuthorizationState
 from ..provider import InvalidAuthenticationRequest
 from ..provider import Provider
@@ -12,27 +12,6 @@ from ..subject_identifier import HashBasedSubjectIdentifierFactory
 from ..userinfo import Userinfo
 
 SE_LEG_PROVIDER_SETTINGS_ENVVAR = 'SE_LEG_PROVIDER_SETTINGS'
-
-
-class ShelveWrapper(object):
-    def __init__(self, filename):
-        self.filename = filename
-        self.db = shelve.open(self.filename, writeback=True)
-
-    def __setitem__(self, key, value):
-        self.db[key] = value
-
-    def __getitem__(self, item):
-        return self.db[item]
-
-    def __contains__(self, item):
-        return item in self.db
-
-    def items(self):
-        return self.db.items()
-
-    def pop(self, item, *args, **kwargs):
-        return self.db.pop(item, *args, **kwargs)
 
 
 def _request_contains_nonce(authentication_request):
@@ -43,10 +22,10 @@ def _request_contains_nonce(authentication_request):
 
 def init_authorization_state(app):
     sub_hash_salt = app.config['PROVIDER_SUBJECT_IDENTIFIER_HASH_SALT']
-    authz_code_db = ShelveWrapper('authz_codes')
-    access_token_db = ShelveWrapper('access_tokens')
-    refresh_token_db = ShelveWrapper('refresh_tokens')
-    sub_db = ShelveWrapper('subject_identifiers')
+    authz_code_db = MongoWrapper(app.config['DB_URI'], 'se_leg_op', 'authz_codes')
+    access_token_db = MongoWrapper(app.config['DB_URI'], 'se_leg_op', 'access_tokens')
+    refresh_token_db = MongoWrapper(app.config['DB_URI'], 'se_leg_op', 'refresh_tokens')
+    sub_db = MongoWrapper(app.config['DB_URI'], 'se_leg_op', 'subject_identifiers')
     return AuthorizationState(HashBasedSubjectIdentifierFactory(sub_hash_salt), authz_code_db, access_token_db,
                               refresh_token_db, sub_db)
 
@@ -74,7 +53,7 @@ def init_oidc_provider(app):
         'claims_parameter_supported': True
     }
 
-    clients_db = ShelveWrapper('clients')
+    clients_db = MongoWrapper(app.config['DB_URI'], 'se_leg_op', 'clients')
     userinfo_db = Userinfo(app.users)
     with open(app.config['PROVIDER_SIGNING_KEY']['PATH']) as f:
         key = f.read()
@@ -86,13 +65,15 @@ def init_oidc_provider(app):
     return provider
 
 
-def oidc_provider_init_app(name=None):
+def oidc_provider_init_app(name=None, config=None):
     name = name or __name__
     app = Flask(name)
     app.config.from_envvar(SE_LEG_PROVIDER_SETTINGS_ENVVAR)
+    if config:
+        app.config.update(config)
 
-    app.authn_requests = ShelveWrapper('authn_requests')
-    app.users = ShelveWrapper('userinfo')
+    app.authn_requests = MongoWrapper(app.config['DB_URI'], 'se_leg_op', 'authn_requests')
+    app.users = MongoWrapper(app.config['DB_URI'], 'se_leg_op', 'userinfo')
 
     logging.basicConfig(level=logging.DEBUG)
 
