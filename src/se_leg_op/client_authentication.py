@@ -1,4 +1,7 @@
 import base64
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class InvalidClientAuthentication(ValueError):
@@ -21,6 +24,8 @@ def verify_client_authentication(parsed_request, clients, authz_header=None):
     client_secret = None
     authn_method = None
     if authz_header:
+        logger.debug('client authentication in Authorization header %s', authz_header)
+
         authz_scheme = authz_header.split(maxsplit=1)[0]
         if authz_scheme == 'Basic':
             authn_method = 'client_secret_basic'
@@ -28,8 +33,11 @@ def verify_client_authentication(parsed_request, clients, authz_header=None):
             auth = base64.urlsafe_b64decode(credentials.encode('utf-8')).decode('utf-8')
             client_id, client_secret = auth.split(':')
         else:
-            raise InvalidClientAuthentication('Unknown scheme in authorization header, {} != Basic'.format(authz_scheme))
+            raise InvalidClientAuthentication(
+                'Unknown scheme in authorization header, {} != Basic'.format(authz_scheme))
     elif 'client_id' in parsed_request:
+        logger.debug('client authentication in request body %s', parsed_request)
+
         client_id = parsed_request['client_id']
         if 'client_secret' in parsed_request:
             authn_method = 'client_secret_post'
@@ -48,6 +56,6 @@ def verify_client_authentication(parsed_request, clients, authz_header=None):
     expected_authn_method = client_info.get('token_endpoint_auth_method', 'client_secret_basic')
     if authn_method != expected_authn_method:
         raise InvalidClientAuthentication(
-                'Wrong authentication method used, MUST use \'{}\''.format(expected_authn_method))
+            'Wrong authentication method used, MUST use \'{}\''.format(expected_authn_method))
 
     return parsed_request
