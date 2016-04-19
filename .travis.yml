@@ -12,6 +12,9 @@ matrix:
 install:
   - pip install -U tox
 
+services:
+  - mongodb
+
 script:
   - tox
 
