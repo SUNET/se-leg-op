@@ -11,13 +11,14 @@ import pytest
 import responses
 from jwkest.jwk import RSAKey, import_rsa_key
 from oic.oic.message import AuthorizationRequest, IdToken, ClaimsRequest, Claims
-from requests.exceptions import ConnectionError
+from rq.worker import SimpleWorker
 
 from se_leg_op.provider import InvalidAuthenticationRequest
-from se_leg_op.service.app import SE_LEG_PROVIDER_SETTINGS_ENVVAR
 from se_leg_op.service.app import MongoWrapper
+from se_leg_op.service.app import SE_LEG_PROVIDER_SETTINGS_ENVVAR
 from se_leg_op.service.app import oidc_provider_init_app
 from tests.storage.mongodb import MongoTemporaryInstance
+from tests.storage.redis import RedisTemporaryInstance
 
 TEST_CLIENT_ID = 'client1'
 TEST_CLIENT_SECRET = 'secret'
@@ -32,15 +33,25 @@ def mongodb():
     tmp_db.shutdown()
 
 
+@pytest.yield_fixture
+def redis():
+    tmp_redis = RedisTemporaryInstance()
+    yield tmp_redis
+    tmp_redis.shutdown()
+
+
 @pytest.fixture
-def inject_app(request, tmpdir, mongodb):
+def inject_app(request, tmpdir, mongodb, redis):
     os.chdir(str(tmpdir))
     os.environ[SE_LEG_PROVIDER_SETTINGS_ENVVAR] = './app_config.py'
     config = {
         '_mongodb': mongodb,
-        'DB_URI': mongodb.get_uri()
+        'DB_URI': mongodb.get_uri(),
+        'REDIS_URI': redis.get_uri()
     }
-    request.instance.app = oidc_provider_init_app(__name__, config=config)
+    app = oidc_provider_init_app(__name__, config=config)
+    app.authn_response_queue.empty()
+    request.instance.app = app
 
 
 @pytest.fixture
@@ -87,6 +98,10 @@ class TestAuthenticationEndpoint(object):
         resp = self.app.test_client().get('/authentication')
         assert resp.status_code == 405  # "Method not allowed"
 
+    def force_send_all_queued_messages(self):
+        worker = SimpleWorker([self.app.authn_response_queue], connection=self.app.authn_response_queue.connection)
+        worker.work(burst=True)
+
     @pytest.fixture
     def create_client_in_db(self, request):
         db_uri = request.instance.app.config['DB_URI']
@@ -115,6 +130,7 @@ class TestAuthenticationEndpoint(object):
         resp = self.app.test_client().post('/authentication', data={})
         assert resp.status_code == 200
 
+        self.force_send_all_queued_messages()
         parsed = urlparse(responses.calls[0].request.url)
         assert dict(parse_qsl(parsed.query)) == {'error': 'invalid_request', 'error_message': 'test'}
 
@@ -131,6 +147,7 @@ class TestAuthenticationEndpoint(object):
         resp = self.app.test_client().post('/authentication', data={})
         assert resp.status_code == 200
 
+        self.force_send_all_queued_messages()
         parsed = urlparse(responses.calls[0].request.url)
         assert dict(parse_qsl(parsed.fragment)) == {'error': 'invalid_request', 'error_message': 'test'}
 
@@ -141,34 +158,14 @@ class TestAuthenticationEndpoint(object):
         assert resp.status_code == 400
 
     @responses.activate
-    def test_connection_error_with_redirect_uri_on_error_response(self, authn_request_args):
-        exception = InvalidAuthenticationRequest('test', AuthorizationRequest(**authn_request_args), 'invalid_request')
-        parse_auth_req_mock = Mock(side_effect=exception)
-        self.app.provider.parse_authentication_request = parse_auth_req_mock
-        # client's redirect_uri can't be reached
-        responses.add(responses.GET, TEST_REDIRECT_URI, body=ConnectionError('Test exception'))
-
-        resp = self.app.test_client().post('/authentication', data={})
-        assert resp.status_code == 400
-
-    @responses.activate
-    def test_non_ok_response_on_error_response_to_redirect_uri(self, authn_request_args):
-        exception = InvalidAuthenticationRequest('test', AuthorizationRequest(**authn_request_args), 'invalid_request')
-        parse_auth_req_mock = Mock(side_effect=exception)
-        self.app.provider.parse_authentication_request = parse_auth_req_mock
-        # client's redirect_uri doesn't return OK
-        responses.add(responses.GET, TEST_REDIRECT_URI, status=400)
-
-        resp = self.app.test_client().post('/authentication', data={})
-        assert resp.status_code == 400
-
-    @responses.activate
     def test_reject_authn_request_without_nonce(self, authn_request_args):
         del authn_request_args['nonce']
         responses.add(responses.GET, TEST_REDIRECT_URI, status=200)
         resp = self.app.test_client().post('/authentication', data=authn_request_args)
 
         assert resp.status_code == 200
+
+        self.force_send_all_queued_messages()
         parsed_response = dict(parse_qsl(urlparse(responses.calls[0].request.url).query))
         assert parsed_response['error'] == 'invalid_request'
         assert 'nonce' in parsed_response['error_message']

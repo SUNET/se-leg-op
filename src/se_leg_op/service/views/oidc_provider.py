@@ -1,11 +1,11 @@
 import flask
-import requests
 from flask import Blueprint
 from flask import current_app
 from flask import jsonify
 from flask.helpers import make_response
 from oic.oic.message import TokenErrorResponse, UserInfoErrorResponse
 
+from ...response_sender import deliver_response_task
 from ...access_token import AccessToken, BearerTokenError
 from ...authz_state import InvalidAccessToken
 from ...authz_state import InvalidAuthorizationCode, InvalidRefreshToken, InvalidScope
@@ -32,7 +32,8 @@ def authentication_endpoint():
         current_app.logger.debug('received invalid authn request', exc_info=True)
         error_url = e.to_error_url()
         if error_url:
-            return deliver_response_to_redirect_uri(error_url)
+            current_app.authn_response_queue.enqueue(deliver_response_task, error_url)
+            return make_response('OK', 200)
         else:
             # deliver directly to client since we're only supporting POST
             return make_response('Something went wrong: {}'.format(str(e)), 400)
@@ -100,23 +101,6 @@ def userinfo_endpoint():
         response.headers['WWW-Authenticate'] = AccessToken.BEARER_TOKEN_TYPE
         response.headers['Content-Type'] = 'application/json'
         return response
-
-
-def deliver_response_to_redirect_uri(response_url):
-    try:
-        resp = requests.get(response_url)
-    except requests.exceptions.RequestException as e:
-        current_app.logger.debug('could not deliver response to client', exc_info=True)
-        return make_response('Something went wrong: {}'.format(str(e)), 400)
-
-    if resp.status_code != 200:
-        current_app.logger.debug('client responded with \'%s\' on response to redirect_uri \'%s\'',
-                                 resp.status_code, resp.request.url)
-        return make_response('Something went wrong: unexpected status \'{}\' from redirect_uri'
-                             .format(resp.status_code), 400)
-
-    return make_response('OK', 200)
-
 
 def extra_userinfo(user_id, client_id):
     return {'vetting_time': current_app.provider.userinfo[user_id]['vetting_time']}

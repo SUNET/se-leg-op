@@ -1,13 +1,14 @@
-import logging
-
+import redis
+import rq
 from flask.app import Flask
 from flask.helpers import url_for
 from jwkest.jwk import RSAKey, import_rsa_key
+from redis.client import StrictRedis
 
-from ..storage import MongoWrapper
 from ..authz_state import AuthorizationState
 from ..provider import InvalidAuthenticationRequest
 from ..provider import Provider
+from ..storage import MongoWrapper
 from ..subject_identifier import HashBasedSubjectIdentifierFactory
 from ..userinfo import Userinfo
 
@@ -65,6 +66,21 @@ def init_oidc_provider(app):
     return provider
 
 
+def init_authn_response_queue(config):
+    if config.get('REDIS_SENTINEL_HOSTS') and config.get('REDIS_SENTINEL_SERVICE_NAME'):
+        _port = config['REDIS_PORT']
+        _hosts = config['REDIS_SENTINEL_HOSTS']
+        _name = config['REDIS_SENTINEL_SERVICE_NAME']
+        host_port = [(x, _port) for x in _hosts]
+        manager = redis.sentinel.Sentinel(host_port, socket_timeout=0.1)
+        pool = redis.sentinel.SentinelConnectionPool(_name, manager)
+    else:
+        pool = redis.ConnectionPool.from_url(config['REDIS_URI'])
+
+    connection = StrictRedis(connection_pool=pool)
+    return rq.Queue('authn_responses', connection=connection)
+
+
 def oidc_provider_init_app(name=None, config=None):
     name = name or __name__
     app = Flask(name)
@@ -74,8 +90,7 @@ def oidc_provider_init_app(name=None, config=None):
 
     app.authn_requests = MongoWrapper(app.config['DB_URI'], 'se_leg_op', 'authn_requests')
     app.users = MongoWrapper(app.config['DB_URI'], 'se_leg_op', 'userinfo')
-
-    logging.basicConfig(level=logging.DEBUG)
+    app.authn_response_queue = init_authn_response_queue(app.config)
 
     from .views.oidc_provider import oidc_provider_views
     app.register_blueprint(oidc_provider_views)
