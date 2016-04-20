@@ -16,11 +16,12 @@ vetting_process_views = Blueprint('vetting_process', __name__, url_prefix='')
 def vetting_result():
     identity = flask.request.form['identity']
     nonce = flask.request.form['nonce']
-    auth_req = current_app.authn_requests.pop(nonce, None)
-    if auth_req is None:
+    auth_req_data = current_app.authn_requests.pop(nonce, None)
+    if auth_req_data is None:
         current_app.logger.debug('Received unknown nonce \'%s\'', nonce)
         return make_response('Unknown nonce', 400)
 
+    auth_req = AuthorizationRequest(**auth_req_data)
     # TODO store necessary user info
     current_app.users[identity] = {'vetting_time': time.time()}
 

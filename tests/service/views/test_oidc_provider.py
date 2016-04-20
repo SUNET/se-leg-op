@@ -15,8 +15,9 @@ from requests.exceptions import ConnectionError
 
 from se_leg_op.provider import InvalidAuthenticationRequest
 from se_leg_op.service.app import SE_LEG_PROVIDER_SETTINGS_ENVVAR
-from se_leg_op.service.app import ShelveWrapper
+from se_leg_op.service.app import MongoWrapper
 from se_leg_op.service.app import oidc_provider_init_app
+from tests.storage.mongodb import MongoTemporaryInstance
 
 TEST_CLIENT_ID = 'client1'
 TEST_CLIENT_SECRET = 'secret'
@@ -24,11 +25,22 @@ TEST_REDIRECT_URI = 'https://client.example.com/redirect_uri'
 TEST_USER_ID = 'user1'
 
 
+@pytest.yield_fixture
+def mongodb():
+    tmp_db = MongoTemporaryInstance()
+    yield tmp_db
+    tmp_db.shutdown()
+
+
 @pytest.fixture
-def inject_app(request, tmpdir):
+def inject_app(request, tmpdir, mongodb):
     os.chdir(str(tmpdir))
     os.environ[SE_LEG_PROVIDER_SETTINGS_ENVVAR] = './app_config.py'
-    request.instance.app = oidc_provider_init_app(__name__)
+    config = {
+        '_mongodb': mongodb,
+        'DB_URI': mongodb.get_uri()
+    }
+    request.instance.app = oidc_provider_init_app(__name__, config=config)
 
 
 @pytest.fixture
@@ -76,9 +88,9 @@ class TestAuthenticationEndpoint(object):
         assert resp.status_code == 405  # "Method not allowed"
 
     @pytest.fixture
-    def create_client_in_db(self, tmpdir):
-        client_db_path = os.path.join(str(tmpdir), 'clients')
-        client_db = ShelveWrapper(client_db_path)
+    def create_client_in_db(self, request):
+        db_uri = request.instance.app.config['DB_URI']
+        client_db = MongoWrapper(db_uri, 'se_leg_op', 'clients')
         client_db[TEST_CLIENT_ID] = {
             'redirect_uris': [TEST_REDIRECT_URI],
             'response_types': [['code']],
@@ -193,9 +205,9 @@ class TestTokenEndpoint(object):
         return id_token
 
     @pytest.fixture
-    def create_client_in_db(self, tmpdir):
-        client_db_path = os.path.join(str(tmpdir), 'clients')
-        client_db = ShelveWrapper(client_db_path)
+    def create_client_in_db(self, request):
+        db_uri = request.instance.app.config['DB_URI']
+        client_db = MongoWrapper(db_uri, 'se_leg_op', 'clients')
         client_db[TEST_CLIENT_ID] = {
             'client_secret': TEST_CLIENT_SECRET,
             'token_endpoint_auth_method': 'client_secret_basic'
@@ -223,8 +235,7 @@ class TestTokenEndpoint(object):
         vetting_time = 23
         code_exchange_request_args['code'] = self.app.provider.authz_state.create_authorization_code(
             AuthorizationRequest(**authn_request_args), sub)
-        self.app.users[TEST_USER_ID] = {}
-        self.app.users[TEST_USER_ID]['vetting_time'] = vetting_time
+        self.app.users[TEST_USER_ID] = {'vetting_time': vetting_time}
 
         resp = self.app.test_client().post('/token', data=code_exchange_request_args,
                                            headers={'Authorization': self.create_basic_auth()})

@@ -286,12 +286,14 @@ class AuthorizationState(object):
             if not sector_identifier:
                 raise ValueError('sector_identifier cannot be None or empty')
 
-            if 'pairwise' not in self.subject_identifiers[user_id]:
-                self.subject_identifiers[user_id]['pairwise'] = set()
             subject_id = self._subject_identifier_factory.create_pairwise_identifier(user_id, sector_identifier)
             logger.debug('returning pairwise sub=%s for user_id=%s and sector_identifier=%s',
-                        subject_id, user_id, sector_identifier)
-            self.subject_identifiers[user_id]['pairwise'].add(subject_id)
+                         subject_id, user_id, sector_identifier)
+            sub = self.subject_identifiers[user_id]
+            pairwise_set = set(sub.get('pairwise', []))
+            pairwise_set.add(subject_id)
+            sub['pairwise'] = list(pairwise_set)
+            self.subject_identifiers[user_id] = sub
             return subject_id
 
         raise ValueError('Unknown subject_type={}'.format(subject_type))
