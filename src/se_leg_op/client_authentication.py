@@ -30,6 +30,9 @@ def verify_client_authentication(parsed_request, clients, authz_header=None):
         if authz_scheme == 'Basic':
             authn_method = 'client_secret_basic'
             credentials = authz_header[len('Basic '):]
+            missing_padding = 4 - len(credentials) % 4
+            if missing_padding:
+                credentials += '=' * missing_padding
             auth = base64.urlsafe_b64decode(credentials.encode('utf-8')).decode('utf-8')
             client_id, client_secret = auth.split(':')
         else:
