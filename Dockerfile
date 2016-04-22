@@ -40,8 +40,7 @@ RUN mkdir -p /op && virtualenv -p python3 /op/env
 ADD . /op/src
 RUN cd /op/src && \
     /op/env/bin/pip install -r requirements.txt && \
-    /op/env/bin/pip install gunicorn && \
-    /op/env/bin/python3 setup.py install
+    /op/env/bin/pip install gunicorn
 
 CMD ["start-stop-daemon", "--start", "-c", "se-leg:se-leg", "--exec", \
      "/op/env/bin/gunicorn", "--pidfile", "/var/run/se-leg-op.pid", \
