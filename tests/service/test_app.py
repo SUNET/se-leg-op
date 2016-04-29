@@ -4,7 +4,7 @@ from urllib.parse import urlparse
 
 import pytest
 import responses
-from oic.oic.message import AuthorizationResponse, AccessTokenResponse, OpenIDSchema
+from oic.oic.message import AuthorizationResponse, AccessTokenResponse, OpenIDSchema, ClaimsRequest, Claims
 from rq.worker import SimpleWorker
 
 from se_leg_op.service.app import SE_LEG_PROVIDER_SETTINGS_ENVVAR, MongoWrapper
@@ -55,7 +55,8 @@ class TestApp(object):
             'redirect_uri': TEST_REDIRECT_URI,
             'response_type': response_type,
             'response_mode': 'query',
-            'nonce': TEST_NONCE
+            'nonce': TEST_NONCE,
+            'claims': ClaimsRequest(userinfo=Claims(identity=None)).to_json()
         }
 
         resp = self.app.test_client().post('/authentication', data=request_args)
@@ -142,6 +143,7 @@ class TestApp(object):
         refresh_resp = self.make_refresh_request(token_resp['refresh_token'])
         userinfo = self.make_userinfo_request(refresh_resp['access_token'])
         assert token_resp['id_token']['sub'] == userinfo['sub']
+        assert userinfo['identity'] == TEST_USER_ID
 
     @responses.activate
     def test_hybrid_flow(self):
@@ -160,3 +162,4 @@ class TestApp(object):
         refresh_resp = self.make_refresh_request(token_resp['refresh_token'])
         userinfo = self.make_userinfo_request(refresh_resp['access_token'])
         assert token_resp['id_token']['sub'] == userinfo['sub']
+        assert userinfo['identity'] == TEST_USER_ID

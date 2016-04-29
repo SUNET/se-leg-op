@@ -24,7 +24,8 @@ def vetting_result():
 
     auth_req = AuthorizationRequest(**auth_req_data)
     # TODO store necessary user info
-    current_app.users[identity] = {'vetting_time': time.time()}
+    current_app.users[identity] = {'vetting_time': time.time(),
+                                   'identity': identity}
 
     authn_response = current_app.provider.authorize(AuthorizationRequest().from_dict(auth_req), identity,
                                                     extra_userinfo)
