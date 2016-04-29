@@ -1,11 +1,13 @@
+import os
 from urllib.parse import parse_qsl, urlparse
 
-import os
 import pytest
 import responses
+from rq.worker import SimpleWorker
 
 from se_leg_op.service.app import oidc_provider_init_app, SE_LEG_PROVIDER_SETTINGS_ENVVAR, MongoWrapper
 from tests.storage.mongodb import MongoTemporaryInstance
+from tests.storage.redis import RedisTemporaryInstance
 
 TEST_CLIENT_ID = 'client1'
 TEST_CLIENT_SECRET = 'secret'
@@ -21,15 +23,25 @@ def mongodb():
     tmp_db.shutdown()
 
 
+@pytest.yield_fixture
+def redis():
+    tmp_redis = RedisTemporaryInstance()
+    yield tmp_redis
+    tmp_redis.shutdown()
+
+
 @pytest.fixture
-def inject_app(request, tmpdir, mongodb):
+def inject_app(request, tmpdir, mongodb, redis):
     os.chdir(str(tmpdir))
     os.environ[SE_LEG_PROVIDER_SETTINGS_ENVVAR] = './app_config.py'
     config = {
         '_mongodb': mongodb,
-        'DB_URI': mongodb.get_uri()
+        'DB_URI': mongodb.get_uri(),
+        'REDIS_URI': redis.get_uri()
     }
-    request.instance.app = oidc_provider_init_app(__name__, config=config)
+    app = oidc_provider_init_app(__name__, config=config)
+    app.authn_response_queue.empty()
+    request.instance.app = app
 
 
 @pytest.fixture
@@ -65,10 +77,16 @@ class TestVettingResultEndpoint(object):
 
         resp = self.app.test_client().post('/vetting-result', data={'nonce': nonce,
                                                                     'identity': TEST_USER_ID})
+
         assert resp.status_code == 200
         # verify the original authentication request has been handled
         assert nonce not in self.app.authn_requests
         assert TEST_USER_ID in self.app.provider.userinfo
+
+        # force sending response from message queue from http://python-rq.org/docs/testing/
+        worker = SimpleWorker([self.app.authn_response_queue], connection=self.app.authn_response_queue.connection)
+        worker.work(burst=True)
+
         # verify the authentication response has been sent to the client
         parsed_response = dict(parse_qsl(urlparse(responses.calls[0].request.url).query))
         assert 'code' in parsed_response

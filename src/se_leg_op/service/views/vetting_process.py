@@ -1,13 +1,14 @@
-import flask
 import time
+
+import flask
 from flask.blueprints import Blueprint
 from flask.globals import current_app
 from flask.helpers import make_response
 from oic.oic.message import AuthorizationRequest
 
-from ...provider import should_fragment_encode
-from .oidc_provider import deliver_response_to_redirect_uri
 from .oidc_provider import extra_userinfo
+from ...provider import should_fragment_encode
+from ...response_sender import deliver_response_task
 
 vetting_process_views = Blueprint('vetting_process', __name__, url_prefix='')
 
@@ -28,7 +29,8 @@ def vetting_result():
     authn_response = current_app.provider.authorize(AuthorizationRequest().from_dict(auth_req), identity,
                                                     extra_userinfo)
     response_url = authn_response.request(auth_req['redirect_uri'], should_fragment_encode(auth_req))
-    return deliver_response_to_redirect_uri(response_url)
+    current_app.authn_response_queue.enqueue(deliver_response_task, response_url)
+    return make_response('OK', 200)
 
 
 @vetting_process_views.route('/update-user-data', methods=['POST'])

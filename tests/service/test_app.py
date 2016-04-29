@@ -5,10 +5,12 @@ from urllib.parse import urlparse
 import pytest
 import responses
 from oic.oic.message import AuthorizationResponse, AccessTokenResponse, OpenIDSchema
+from rq.worker import SimpleWorker
 
 from se_leg_op.service.app import SE_LEG_PROVIDER_SETTINGS_ENVVAR, MongoWrapper
 from se_leg_op.service.app import oidc_provider_init_app
 from tests.storage.mongodb import MongoTemporaryInstance
+from tests.storage.redis import RedisTemporaryInstance
 
 TEST_CLIENT_ID = 'client1'
 TEST_CLIENT_SECRET = 'my_secret'
@@ -24,14 +26,24 @@ def mongodb():
     tmp_db.shutdown()
 
 
+@pytest.yield_fixture
+def redis():
+    tmp_redis = RedisTemporaryInstance()
+    yield tmp_redis
+    tmp_redis.shutdown()
+
+
 @pytest.fixture
-def inject_app(request, tmpdir, mongodb):
+def inject_app(request, tmpdir, mongodb, redis):
     os.chdir(str(tmpdir))
     os.environ[SE_LEG_PROVIDER_SETTINGS_ENVVAR] = './app_config.py'
     config = {
-        'DB_URI': mongodb.get_uri()
+        'DB_URI': mongodb.get_uri(),
+        'REDIS_URI': redis.get_uri()
     }
-    request.instance.app = oidc_provider_init_app(__name__, config=config)
+    app = oidc_provider_init_app(__name__, config=config)
+    app.authn_response_queue.empty()
+    request.instance.app = app
 
 
 @pytest.mark.usefixtures('inject_app', 'create_client_in_db')
@@ -57,6 +69,10 @@ class TestApp(object):
         }
         resp = self.app.test_client().post('/vetting-result', data=vetting_result)
         assert resp.status_code == 200
+
+        # force all authentication responses to be sent
+        worker = SimpleWorker([self.app.authn_response_queue], connection=self.app.authn_response_queue.connection)
+        worker.work(burst=True)
 
     def parse_authentication_response(self, redirect_uri):
         authn_response = AuthorizationResponse().from_urlencoded(urlparse(redirect_uri).query)
