@@ -81,7 +81,7 @@ class TestVettingResultEndpoint(object):
         assert resp.status_code == 200
         # verify the original authentication request has been handled
         assert nonce not in self.app.authn_requests
-        assert TEST_USER_ID in self.app.provider.userinfo
+        assert self.app.users[TEST_USER_ID]['identity'] == TEST_USER_ID
 
         # force sending response from message queue from http://python-rq.org/docs/testing/
         worker = SimpleWorker([self.app.authn_response_queue], connection=self.app.authn_response_queue.connection)
