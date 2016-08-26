@@ -54,14 +54,8 @@ class InvalidUserinfoRequest(ValueError):
 
 
 def should_fragment_encode(authentication_request):
-    if authentication_request.get('response_mode') == 'fragment':
-        # explicitly requested fragment encoding
-        return True
-    elif authentication_request.get('response_mode') == 'query':
-        # explicitly requested fragment encoding
-        return False
-    elif authentication_request['response_type'] == ['code']:
-        # not implicit or hybrid flow
+    if authentication_request['response_type'] == ['code']:
+        # Authorization Code Flow -> query encode
         return False
 
     return True

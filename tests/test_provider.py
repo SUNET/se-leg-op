@@ -410,14 +410,6 @@ class TestProviderJWKS(object):
 
 
 class TestShouldFragmentEncode(object):
-    def test_explicit_fragment_encode_despite_code_flow(self):
-        auth_req = {'response_mode': 'fragment', 'response_type': 'code'}
-        assert should_fragment_encode(auth_req) is True
-
-    def test_explicit_query_encode_despite_implicit_flow(self):
-        auth_req = {'response_mode': 'query', 'response_type': 'id_token'}
-        assert should_fragment_encode(auth_req) is False
-
     @pytest.mark.parametrize('response_type, expected', [
         ('code', False),
         ('id_token', True),

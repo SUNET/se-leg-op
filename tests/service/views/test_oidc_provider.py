@@ -136,7 +136,7 @@ class TestAuthenticationEndpoint(object):
 
     @responses.activate
     def test_fragment_encoded_error_response(self, authn_request_args):
-        authn_request_args['response_mode'] = 'fragment'
+        authn_request_args['response_type'] = 'code id_token'
         exception = InvalidAuthenticationRequest('test', AuthorizationRequest(**authn_request_args), 'invalid_request')
         parse_auth_req_mock = Mock(side_effect=exception)
         self.app.provider.parse_authentication_request = parse_auth_req_mock

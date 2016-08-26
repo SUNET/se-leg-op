@@ -54,7 +54,6 @@ class TestApp(object):
             'client_id': TEST_CLIENT_ID,
             'redirect_uri': TEST_REDIRECT_URI,
             'response_type': response_type,
-            'response_mode': 'query',
             'nonce': TEST_NONCE,
             'claims': ClaimsRequest(userinfo=Claims(identity=None)).to_json()
         }
@@ -75,8 +74,13 @@ class TestApp(object):
         worker = SimpleWorker([self.app.authn_response_queue], connection=self.app.authn_response_queue.connection)
         worker.work(burst=True)
 
-    def parse_authentication_response(self, redirect_uri):
-        authn_response = AuthorizationResponse().from_urlencoded(urlparse(redirect_uri).query)
+    def parse_authentication_response(self, redirect_uri, fragment_encoded=False):
+        parsed_url = urlparse(redirect_uri)
+        if fragment_encoded:
+            response = parsed_url.fragment
+        else:
+            response = parsed_url.query
+        authn_response = AuthorizationResponse().from_urlencoded(response)
         assert authn_response.verify(key=[self.app.provider.signing_key])
         return authn_response
 
@@ -153,7 +157,7 @@ class TestApp(object):
         # approved vetting happens
         self.post_vetting_result()
 
-        authn_response = self.parse_authentication_response(responses.calls[0].request.url)
+        authn_response = self.parse_authentication_response(responses.calls[0].request.url, fragment_encoded=True)
         token_resp = self.make_code_exchange_request(authn_response['code'])
         userinfo = self.make_userinfo_request(token_resp['access_token'])
         assert authn_response['id_token']['sub'] == token_resp['id_token']['sub'] == userinfo['sub']
