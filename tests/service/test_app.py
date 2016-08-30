@@ -1,5 +1,4 @@
 import base64
-import os
 from urllib.parse import urlparse
 
 import pytest
@@ -7,43 +6,13 @@ import responses
 from oic.oic.message import AuthorizationResponse, AccessTokenResponse, OpenIDSchema, ClaimsRequest, Claims
 from rq.worker import SimpleWorker
 
-from se_leg_op.service.app import SE_LEG_PROVIDER_SETTINGS_ENVVAR, OpStorageWrapper
-from se_leg_op.service.app import oidc_provider_init_app
-from tests.storage.mongodb import MongoTemporaryInstance
-from tests.storage.redis import RedisTemporaryInstance
+from se_leg_op.storage import OpStorageWrapper
 
 TEST_CLIENT_ID = 'client1'
 TEST_CLIENT_SECRET = 'my_secret'
 TEST_REDIRECT_URI = 'https://client.example.com/redirect_uri'
 TEST_USER_ID = 'user1'
 TEST_NONCE = 'nonce'
-
-
-@pytest.yield_fixture
-def mongodb():
-    tmp_db = MongoTemporaryInstance()
-    yield tmp_db
-    tmp_db.shutdown()
-
-
-@pytest.yield_fixture
-def redis():
-    tmp_redis = RedisTemporaryInstance()
-    yield tmp_redis
-    tmp_redis.shutdown()
-
-
-@pytest.fixture
-def inject_app(request, tmpdir, mongodb, redis):
-    os.chdir(str(tmpdir))
-    os.environ[SE_LEG_PROVIDER_SETTINGS_ENVVAR] = './app_config.py'
-    config = {
-        'DB_URI': mongodb.get_uri(),
-        'REDIS_URI': redis.get_uri()
-    }
-    app = oidc_provider_init_app(__name__, config=config)
-    app.authn_response_queue.empty()
-    request.instance.app = app
 
 
 @pytest.mark.usefixtures('inject_app', 'create_client_in_db')
@@ -125,7 +94,7 @@ class TestApp(object):
         client_db = OpStorageWrapper(db_uri, 'clients')
         client_db[TEST_CLIENT_ID] = {
             'redirect_uris': [TEST_REDIRECT_URI],
-            'response_types': [['code'], ['code', 'id_token', 'token']],
+            'response_types': ['code', 'code id_token token'],
             'client_secret': TEST_CLIENT_SECRET
         }
         self.app.provider.clients = client_db

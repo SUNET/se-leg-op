@@ -4,14 +4,14 @@ import rq
 from flask.app import Flask
 from flask.helpers import url_for
 from jwkest.jwk import RSAKey, import_rsa_key
+from pyop.authz_state import AuthorizationState
+from pyop.exceptions import InvalidAuthenticationRequest
+from pyop.provider import Provider
+from pyop.subject_identifier import HashBasedSubjectIdentifierFactory
+from pyop.userinfo import Userinfo
 from redis.client import StrictRedis
 
-from ..authz_state import AuthorizationState
-from ..provider import InvalidAuthenticationRequest
-from ..provider import Provider
 from ..storage import OpStorageWrapper
-from ..subject_identifier import HashBasedSubjectIdentifierFactory
-from ..userinfo import Userinfo
 
 SE_LEG_PROVIDER_SETTINGS_ENVVAR = 'SE_LEG_PROVIDER_SETTINGS'
 
@@ -29,7 +29,7 @@ def init_authorization_state(app):
     refresh_token_db = OpStorageWrapper(app.config['DB_URI'], 'refresh_tokens')
     sub_db = OpStorageWrapper(app.config['DB_URI'], 'subject_identifiers')
     return AuthorizationState(HashBasedSubjectIdentifierFactory(sub_hash_salt), authz_code_db, access_token_db,
-                              refresh_token_db, sub_db)
+                              refresh_token_db, sub_db, refresh_token_lifetime=60 * 60 * 24 * 365)
 
 
 def init_oidc_provider(app):

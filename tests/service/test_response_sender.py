@@ -4,10 +4,10 @@ from urllib.parse import urlparse
 import pytest
 import responses
 import rq
-from oic.oic.message import AuthorizationResponse, AuthorizationRequest
+from oic.oic.message import AuthorizationResponse
 from redis.client import StrictRedis
 
-from se_leg_op.response_sender import deliver_response_task
+from se_leg_op.service.response_sender import deliver_response_task
 
 
 @pytest.fixture
