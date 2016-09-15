@@ -27,7 +27,7 @@ RUN apt-get -y install \
 # insert additional apt-get installs here
 RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 
-RUN adduser --system --group se-leg
+RUN adduser --system --group seleg
 
 # Add Dockerfile to the container as documentation
 ADD Dockerfile /Dockerfile
@@ -42,7 +42,7 @@ RUN cd /op/src && \
     /op/env/bin/pip install -r requirements.txt && \
     /op/env/bin/pip install gunicorn
 
-CMD ["start-stop-daemon", "--start", "-c", "se-leg:se-leg", "--exec", \
+CMD ["start-stop-daemon", "--start", "-c", "seleg:seleg", "--exec", \
      "/op/env/bin/gunicorn", "--pidfile", "/var/run/se-leg-op.pid", \
      "--", \
      "--bind", "0.0.0.0:5000", "--chdir", "/tmp", \
