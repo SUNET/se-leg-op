@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import pytest
-from se_leg_op.storage import MongoWrapper
+from se_leg_op.storage import OpStorageWrapper
 from tests.storage.mongodb import MongoTemporaryInstance
 
 __author__ = 'lundberg'
@@ -19,7 +19,7 @@ class TestMongoStorage(object):
 
     @pytest.fixture()
     def db(self, mongodb):
-        return MongoWrapper(mongodb.get_uri(), 'se_leg_op', 'test')
+        return OpStorageWrapper(mongodb.get_uri(), 'test')
 
     def test_write(self, db):
         db['foo'] = 'bar'

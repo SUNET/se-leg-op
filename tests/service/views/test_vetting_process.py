@@ -5,7 +5,7 @@ import pytest
 import responses
 from rq.worker import SimpleWorker
 
-from se_leg_op.service.app import oidc_provider_init_app, SE_LEG_PROVIDER_SETTINGS_ENVVAR, MongoWrapper
+from se_leg_op.service.app import oidc_provider_init_app, SE_LEG_PROVIDER_SETTINGS_ENVVAR, OpStorageWrapper
 from tests.storage.mongodb import MongoTemporaryInstance
 from tests.storage.redis import RedisTemporaryInstance
 
@@ -61,7 +61,7 @@ class TestVettingResultEndpoint(object):
     @pytest.fixture
     def create_client_in_db(self, request):
         db_uri = request.instance.app.config['DB_URI']
-        client_db = MongoWrapper(db_uri, 'se_leg_op', 'clients')
+        client_db = OpStorageWrapper(db_uri, 'clients')
         client_db[TEST_CLIENT_ID] = {
             'redirect_uris': [TEST_REDIRECT_URI],
             'client_secret': TEST_CLIENT_SECRET,
