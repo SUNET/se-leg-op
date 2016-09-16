@@ -45,6 +45,12 @@ class MongoWrapper(object):
         return data
 
 
+class OpStorageWrapper(MongoWrapper):
+
+    def __init__(self, db_uri, collection):
+        super(OpStorageWrapper, self).__init__(db_uri, 'seleg_op', collection)
+
+
 class MongoDB(object):
     """Simple wrapper to get pymongo real objects from the settings uri"""
 

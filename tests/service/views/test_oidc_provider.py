@@ -14,7 +14,7 @@ from oic.oic.message import AuthorizationRequest, IdToken, ClaimsRequest, Claims
 from rq.worker import SimpleWorker
 
 from se_leg_op.provider import InvalidAuthenticationRequest
-from se_leg_op.service.app import MongoWrapper
+from se_leg_op.service.app import OpStorageWrapper
 from se_leg_op.service.app import SE_LEG_PROVIDER_SETTINGS_ENVVAR
 from se_leg_op.service.app import oidc_provider_init_app
 from tests.storage.mongodb import MongoTemporaryInstance
@@ -105,7 +105,7 @@ class TestAuthenticationEndpoint(object):
     @pytest.fixture
     def create_client_in_db(self, request):
         db_uri = request.instance.app.config['DB_URI']
-        client_db = MongoWrapper(db_uri, 'se_leg_op', 'clients')
+        client_db = OpStorageWrapper(db_uri, 'clients')
         client_db[TEST_CLIENT_ID] = {
             'redirect_uris': [TEST_REDIRECT_URI],
             'response_types': [['code']],
@@ -204,7 +204,7 @@ class TestTokenEndpoint(object):
     @pytest.fixture
     def create_client_in_db(self, request):
         db_uri = request.instance.app.config['DB_URI']
-        client_db = MongoWrapper(db_uri, 'se_leg_op', 'clients')
+        client_db = OpStorageWrapper(db_uri, 'clients')
         client_db[TEST_CLIENT_ID] = {
             'client_secret': TEST_CLIENT_SECRET,
             'token_endpoint_auth_method': 'client_secret_basic'

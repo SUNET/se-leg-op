@@ -8,7 +8,7 @@ from redis.client import StrictRedis
 from ..authz_state import AuthorizationState
 from ..provider import InvalidAuthenticationRequest
 from ..provider import Provider
-from ..storage import MongoWrapper
+from ..storage import OpStorageWrapper
 from ..subject_identifier import HashBasedSubjectIdentifierFactory
 from ..userinfo import Userinfo
 
@@ -23,10 +23,10 @@ def _request_contains_nonce(authentication_request):
 
 def init_authorization_state(app):
     sub_hash_salt = app.config['PROVIDER_SUBJECT_IDENTIFIER_HASH_SALT']
-    authz_code_db = MongoWrapper(app.config['DB_URI'], 'se_leg_op', 'authz_codes')
-    access_token_db = MongoWrapper(app.config['DB_URI'], 'se_leg_op', 'access_tokens')
-    refresh_token_db = MongoWrapper(app.config['DB_URI'], 'se_leg_op', 'refresh_tokens')
-    sub_db = MongoWrapper(app.config['DB_URI'], 'se_leg_op', 'subject_identifiers')
+    authz_code_db = OpStorageWrapper(app.config['DB_URI'], 'authz_codes')
+    access_token_db = OpStorageWrapper(app.config['DB_URI'], 'access_tokens')
+    refresh_token_db = OpStorageWrapper(app.config['DB_URI'], 'refresh_tokens')
+    sub_db = OpStorageWrapper(app.config['DB_URI'], 'subject_identifiers')
     return AuthorizationState(HashBasedSubjectIdentifierFactory(sub_hash_salt), authz_code_db, access_token_db,
                               refresh_token_db, sub_db)
 
@@ -54,7 +54,7 @@ def init_oidc_provider(app):
         'claims_parameter_supported': True
     }
 
-    clients_db = MongoWrapper(app.config['DB_URI'], 'se_leg_op', 'clients')
+    clients_db = OpStorageWrapper(app.config['DB_URI'], 'clients')
     userinfo_db = Userinfo(app.users)
     with open(app.config['PROVIDER_SIGNING_KEY']['PATH']) as f:
         key = f.read()
@@ -88,8 +88,8 @@ def oidc_provider_init_app(name=None, config=None):
     if config:
         app.config.update(config)
 
-    app.authn_requests = MongoWrapper(app.config['DB_URI'], 'se_leg_op', 'authn_requests')
-    app.users = MongoWrapper(app.config['DB_URI'], 'se_leg_op', 'userinfo')
+    app.authn_requests = OpStorageWrapper(app.config['DB_URI'], 'authn_requests')
+    app.users = OpStorageWrapper(app.config['DB_URI'], 'userinfo')
     app.authn_response_queue = init_authn_response_queue(app.config)
 
     from .views.oidc_provider import oidc_provider_views
