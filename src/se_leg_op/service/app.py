@@ -1,4 +1,5 @@
 import redis
+import redis.sentinel
 import rq
 from flask.app import Flask
 from flask.helpers import url_for
