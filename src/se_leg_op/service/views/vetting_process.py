@@ -5,10 +5,10 @@ from flask.blueprints import Blueprint
 from flask.globals import current_app
 from flask.helpers import make_response
 from oic.oic.message import AuthorizationRequest
+from pyop.util import should_fragment_encode
 
 from .oidc_provider import extra_userinfo
-from ...provider import should_fragment_encode
-from ...response_sender import deliver_response_task
+from ...service.response_sender import deliver_response_task
 
 vetting_process_views = Blueprint('vetting_process', __name__, url_prefix='')
 
