@@ -1,3 +1,4 @@
+import json
 from urllib.parse import parse_qsl, urlparse
 
 import pytest
@@ -44,7 +45,9 @@ class TestVettingResultEndpoint(object):
         nonce = authn_request_args['nonce']
         self.app.authn_requests[nonce] = authn_request_args
 
-        resp = self.app.test_client().post('/vetting-result', data={'nonce': nonce,
+        token = 'token'
+        qrdata = '1' + json.dumps({'nonce': nonce, 'token': token})
+        resp = self.app.test_client().post('/vetting-result', data={'qrcode': qrdata,
                                                                     'identity': TEST_USER_ID})
 
         assert resp.status_code == 200
@@ -61,16 +64,29 @@ class TestVettingResultEndpoint(object):
         assert 'code' in parsed_response
         assert parsed_response['state'] == authn_request_args['state']
         assert parsed_response['code'] in self.app.provider.authz_state.authorization_codes
+        assert responses.calls[0].request.headers['Authorization'] == 'Bearer ' + token
 
     @pytest.mark.parametrize('parameters', [
-        {'identity': TEST_USER_ID},  # missing 'nonce'
-        {'nonce': 'nonce'},  # missing 'identity'
+        {'identity': TEST_USER_ID},  # missing 'qrcode'
+        {'qrcode': 'nonce token'},  # missing 'identity'
     ])
     def test_vetting_endpoint_with_missing_data(self, parameters):
         resp = self.app.test_client().post('/vetting-result', data=parameters)
         assert resp.status_code == 400
 
+    @pytest.mark.parametrize('qrdata', [
+        '',  # no qr data
+        '1foobar',  # invalid data
+        '1{"token": "token"}',  # missing 'nonce'
+        '1{"nonce": "nonce"}',  # missing 'token'
+        '2{"token": "token", "nonce": "nonce"}'  # invalid qr version
+    ])
+    def test_vetting_endpoint_with_invalid_qr_data(self, authn_request_args, qrdata):
+        resp = self.app.test_client().post('/vetting-result', data={'qrcode': qrdata,
+                                                                    'identity': TEST_USER_ID})
+        assert resp.status_code == 400
+
     def test_unexpected_nonce(self):
-        resp = self.app.test_client().post('/vetting-result', data={'nonce': 'unexpected',
+        resp = self.app.test_client().post('/vetting-result', data={'qrcode': 'unexpected token',
                                                                     'identity': TEST_USER_ID})
         assert resp.status_code == 400

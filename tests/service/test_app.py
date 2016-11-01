@@ -1,4 +1,5 @@
 import base64
+import json
 from urllib.parse import urlparse
 
 import pytest
@@ -13,6 +14,7 @@ TEST_CLIENT_SECRET = 'my_secret'
 TEST_REDIRECT_URI = 'https://client.example.com/redirect_uri'
 TEST_USER_ID = 'user1'
 TEST_NONCE = 'nonce'
+TEST_TOKEN = 'token'
 
 
 @pytest.mark.usefixtures('inject_app', 'create_client_in_db')
@@ -33,7 +35,7 @@ class TestApp(object):
 
     def post_vetting_result(self):
         vetting_result = {
-            'nonce': TEST_NONCE,
+            'qrcode': '1' + json.dumps({'nonce': TEST_NONCE, 'token': TEST_TOKEN}),
             'identity': TEST_USER_ID
         }
         resp = self.app.test_client().post('/vetting-result', data=vetting_result)
