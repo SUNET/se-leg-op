@@ -6,8 +6,10 @@ from flask.helpers import make_response
 from oic.oic.message import TokenErrorResponse, UserInfoErrorResponse
 from pyop.access_token import AccessToken, BearerTokenError
 from pyop.exceptions import InvalidAuthenticationRequest, InvalidAccessToken, InvalidClientAuthentication, OAuthError
+from pyop.util import should_fragment_encode
 
 from ..response_sender import deliver_response_task
+from ..vetting_process_tools import create_authentication_response
 
 oidc_provider_views = Blueprint('oidc_provider', __name__, url_prefix='')
 
@@ -33,6 +35,13 @@ def authentication_endpoint():
         else:
             # deliver directly to client since we're only supporting POST
             return make_response('Something went wrong: {}'.format(str(e)), 400)
+
+    client = current_app.provider.clients[auth_req['client_id']]
+    if client.get('vetting_policy', None) == 'post_auth':
+        # Return a authn response immediately
+        authn_response = create_authentication_response(auth_req)
+        response_url = authn_response.request(auth_req['redirect_uri'], should_fragment_encode(auth_req))
+        current_app.authn_response_queue.enqueue(deliver_response_task, response_url)
 
     return make_response('OK', 200)
 
