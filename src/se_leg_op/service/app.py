@@ -95,8 +95,8 @@ def oidc_provider_init_app(name=None, config=None):
 
     from .views.oidc_provider import oidc_provider_views
     app.register_blueprint(oidc_provider_views)
-    from .views.vetting_process import vetting_process_views
-    app.register_blueprint(vetting_process_views)
+    from .views.se_leg_vetting_process import se_leg_vetting_process_views
+    app.register_blueprint(se_leg_vetting_process_views)
 
     # Initialize the oidc_provider after views to be able to set correct urls
     app.provider = init_oidc_provider(app)
