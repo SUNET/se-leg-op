@@ -97,6 +97,8 @@ def oidc_provider_init_app(name=None, config=None):
     app.register_blueprint(oidc_provider_views)
     from .views.se_leg_vetting_process import se_leg_vetting_process_views
     app.register_blueprint(se_leg_vetting_process_views)
+    from .views.yubico_vetting_process import yubico_vetting_process_views
+    app.register_blueprint(yubico_vetting_process_views)
 
     # Initialize the oidc_provider after views to be able to set correct urls
     app.provider = init_oidc_provider(app)

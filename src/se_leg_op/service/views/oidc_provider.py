@@ -37,7 +37,7 @@ def authentication_endpoint():
             return make_response('Something went wrong: {}'.format(str(e)), 400)
 
     client = current_app.provider.clients[auth_req['client_id']]
-    if client.get('vetting_policy', None) == 'post_auth':
+    if client.get('vetting_policy', None) == 'POST_AUTH':
         # Return a authn response immediately
         authn_response = create_authentication_response(auth_req)
         response_url = authn_response.request(auth_req['redirect_uri'], should_fragment_encode(auth_req))

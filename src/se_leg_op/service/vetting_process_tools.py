@@ -31,10 +31,10 @@ def parse_qrdata(qrcode):
     return qrdata
 
 
-def create_authentication_response(authn_req, user_id=None, extra_userinfo=None):
+def create_authentication_response(auth_req, user_id=None, extra_userinfo=None):
     """
-    :param authn_req: Authentication request
-    :type authn_req: oic.oic.message.AuthorizationRequest
+    :param auth_req: Authentication request
+    :type auth_req: oic.oic.message.AuthorizationRequest
     :param user_id: Local identifier for the user
     :type user_id: str|None
     :param extra_userinfo: Extra user info
@@ -47,7 +47,11 @@ def create_authentication_response(authn_req, user_id=None, extra_userinfo=None)
     """
 
     if user_id is None:
-        user_id = uuid.uuid4()
-    authn_response = current_app.provider.authorize(AuthorizationRequest().from_dict(authn_req), user_id,
+        user_id = str(uuid.uuid4())
+        # Persist a connection between authn request and generated user id
+        auth_req_dict = auth_req.to_dict()
+        auth_req_dict['user_id'] = user_id
+        current_app.authn_requests[auth_req['nonce']] = auth_req_dict
+    authn_response = current_app.provider.authorize(AuthorizationRequest().from_dict(auth_req), user_id,
                                                     extra_userinfo)
     return authn_response
