@@ -52,6 +52,8 @@ def create_authentication_response(auth_req, user_id=None, extra_userinfo=None):
         auth_req_dict = auth_req.to_dict()
         auth_req_dict['user_id'] = user_id
         current_app.authn_requests[auth_req['nonce']] = auth_req_dict
+        # Initialize empy userinfo
+        current_app.users[user_id] = {}
     authn_response = current_app.provider.authorize(AuthorizationRequest().from_dict(auth_req), user_id,
                                                     extra_userinfo)
     return authn_response
