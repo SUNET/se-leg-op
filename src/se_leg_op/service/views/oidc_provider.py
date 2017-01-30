@@ -41,7 +41,8 @@ def authentication_endpoint():
         # Return a authn response immediately
         authn_response = create_authentication_response(auth_req)
         response_url = authn_response.request(auth_req['redirect_uri'], should_fragment_encode(auth_req))
-        current_app.authn_response_queue.enqueue(deliver_response_task, response_url)
+        headers = {'Authorization': 'Bearer {}'.format(auth_req['token'])}
+        current_app.authn_response_queue.enqueue(deliver_response_task, response_url, headers=headers)
 
     return make_response('OK', 200)
 
