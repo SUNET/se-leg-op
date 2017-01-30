@@ -93,4 +93,8 @@ def userinfo_endpoint():
 
 
 def extra_userinfo(user_id, client_id):
-    return {'vetting_time': current_app.provider.userinfo[user_id]['vetting_time']}
+    try:
+        vetting_time = current_app.provider.userinfo[user_id]['vetting_time']
+    except KeyError:
+        vetting_time = None
+    return {'vetting_time': vetting_time}
