@@ -48,6 +48,7 @@ class TestVettingResultEndpoint(object):
         responses.add(responses.GET, TEST_REDIRECT_URI, status=200)
         nonce = authn_request_args['nonce']
         self.app.authn_requests[nonce] = authn_request_args
+        self.app.users[TEST_USER_ID] = {}
 
         token = 'token'
         qrdata = '1' + json.dumps({'nonce': nonce, 'token': token})
@@ -58,7 +59,7 @@ class TestVettingResultEndpoint(object):
         # verify the original authentication request is not removed
         assert nonce in self.app.authn_requests
         # verify the posted data ends up in the userinfo document
-        assert self.app.users[TEST_USER_ID]['data'] == VETTING_DATA
+        assert self.app.users[TEST_USER_ID]['vetting_results'][0]['data'] == VETTING_DATA
 
     @pytest.mark.parametrize('parameters', [
         {'data': json.dumps(VETTING_DATA)},  # missing 'qrcode'
