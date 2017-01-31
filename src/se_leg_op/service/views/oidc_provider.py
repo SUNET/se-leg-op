@@ -26,6 +26,20 @@ def authentication_endpoint():
         auth_req = current_app.provider.parse_authentication_request(flask.request.get_data().decode('utf-8'),
                                                                      flask.request.headers)
         current_app.authn_requests[auth_req['nonce']] = auth_req.to_dict()
+
+        # Check client vetting method
+        client = current_app.provider.clients[auth_req['client_id']]
+        if client.get('vetting_policy') == 'POST_AUTH':
+            # Return a authn response immediately
+            authn_response = create_authentication_response(auth_req)
+            response_url = authn_response.request(auth_req['redirect_uri'], should_fragment_encode(auth_req))
+            try:
+                headers = {'Authorization': 'Bearer {}'.format(auth_req['token'])}
+            except KeyError:
+                # Bearer Token needs to be supplied with the auth request for instant responses
+                raise InvalidAuthenticationRequest('Token missing', auth_req)
+            current_app.authn_response_queue.enqueue(deliver_response_task, response_url, headers=headers)
+
     except InvalidAuthenticationRequest as e:
         current_app.logger.debug('received invalid authn request', exc_info=True)
         error_url = e.to_error_url()
@@ -35,14 +49,6 @@ def authentication_endpoint():
         else:
             # deliver directly to client since we're only supporting POST
             return make_response('Something went wrong: {}'.format(str(e)), 400)
-
-    client = current_app.provider.clients[auth_req['client_id']]
-    if client.get('vetting_policy', None) == 'POST_AUTH':
-        # Return a authn response immediately
-        authn_response = create_authentication_response(auth_req)
-        response_url = authn_response.request(auth_req['redirect_uri'], should_fragment_encode(auth_req))
-        headers = {'Authorization': 'Bearer {}'.format(auth_req['token'])}
-        current_app.authn_response_queue.enqueue(deliver_response_task, response_url, headers=headers)
 
     return make_response('OK', 200)
 

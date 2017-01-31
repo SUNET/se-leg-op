@@ -43,7 +43,8 @@ def post_auth_authn_request_args():
         'redirect_uri': POST_AUTH_TEST_REDIRECT_URI,
         'response_type': 'code',
         'scope': 'openid',
-        'nonce': 'nonce'
+        'nonce': 'nonce',
+        'token': 'token'
     }
 
 @pytest.mark.usefixtures('inject_app')
@@ -128,6 +129,12 @@ class TestAuthenticationEndpoint(object):
         self.force_send_all_queued_messages()
         parsed = urlparse(responses.calls[0].request.url)
         assert dict(parse_qsl(parsed.query)) == {'error': 'invalid_request', 'error_message': 'test'}
+
+    def test_error_response_no_token_post_auth(self, post_auth_authn_request_args):
+        post_auth_authn_request_args.pop('token')
+        resp = self.app.test_client().post('/authentication', data=post_auth_authn_request_args)
+        assert resp.status_code == 400
+        assert b'Token missing' in resp.data
 
     @responses.activate
     def test_fragment_encoded_error_response(self, authn_request_args):
