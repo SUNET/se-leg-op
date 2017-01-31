@@ -39,7 +39,12 @@ def vetting_result():
 
     # TODO Use vetting data to verify a users drivers license
     vetting_data = json.loads(data)
+
     # TODO store necessary user info
-    current_app.users[user_id] = {'vetting_time': time.time(), 'data': vetting_data}
+    userinfo = current_app.users[user_id]
+    if 'vetting_results' not in userinfo:
+        userinfo = {'vetting_results': []}
+    userinfo['vetting_results'].append({'vetting_time': time.time(), 'data': vetting_data})
+    current_app.users[user_id] = userinfo
 
     return make_response('OK', 200)
