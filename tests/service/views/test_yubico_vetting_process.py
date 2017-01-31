@@ -61,6 +61,19 @@ class TestVettingResultEndpoint(object):
         # verify the posted data ends up in the userinfo document
         assert self.app.users[TEST_USER_ID]['vetting_results'][0]['data'] == VETTING_DATA
 
+    # XXX: Remove after development
+    @responses.activate
+    def test_vetting_endpoint_development_nonce(self):
+        self.app.config['TEST_NONCE'] = 'test'
+        responses.add(responses.GET, TEST_REDIRECT_URI, status=200)
+
+        token = 'token'
+        qrdata = '1' + json.dumps({'nonce': 'test', 'token': token})
+        resp = self.app.test_client().post(VETTING_RESULT_ENDPOINT,
+                                           data={'qrcode': qrdata, 'data': json.dumps(VETTING_DATA)})
+
+        assert resp.status_code == 200
+
     @pytest.mark.parametrize('parameters', [
         {'data': json.dumps(VETTING_DATA)},  # missing 'qrcode'
         {'qrcode': 'nonce token'},  # missing 'identity'

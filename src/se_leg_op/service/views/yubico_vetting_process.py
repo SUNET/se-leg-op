@@ -7,11 +7,8 @@ from flask.blueprints import Blueprint
 from flask.globals import current_app
 from flask.helpers import make_response
 from oic.oic.message import AuthorizationRequest
-from pyop.util import should_fragment_encode
 
-from .oidc_provider import extra_userinfo
-from ...service.response_sender import deliver_response_task
-from ...service.vetting_process_tools import parse_qrdata, InvalidQrDataError, create_authentication_response
+from ...service.vetting_process_tools import parse_qrdata, InvalidQrDataError
 
 __author__ = 'lundberg'
 
@@ -31,6 +28,13 @@ def vetting_result():
     try:
         auth_req_data = current_app.authn_requests[qrdata['nonce']]
     except KeyError:
+        # XXX: Short circuit vetting process for special nonce during development
+        if qrdata['nonce'] in current_app.config.get('TEST_NONCE', []):
+            current_app.logger.debug('Found test nonce {}'.format(qrdata['nonce']))
+            development_license_check(data)
+            return make_response('OK', 200)
+        # XXX: Remove later
+
         current_app.logger.debug('Received unknown nonce \'%s\'', qrdata['nonce'])
         return make_response('Unknown nonce', 400)
 
@@ -48,3 +52,8 @@ def vetting_result():
     current_app.users[user_id] = userinfo
 
     return make_response('OK', 200)
+
+
+def development_license_check(data):
+    # TODO: What do we want to do here?
+    current_app.logger.info('Test data received: {}'.format(data))
