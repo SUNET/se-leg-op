@@ -10,6 +10,8 @@ from pyop.provider import Provider
 from pyop.subject_identifier import HashBasedSubjectIdentifierFactory
 from pyop.userinfo import Userinfo
 from redis.client import StrictRedis
+from flask_registry import BlueprintAutoDiscoveryRegistry, ConfigurationRegistry, ExtensionRegistry
+from flask_registry import PackageRegistry, Registry
 
 from ..storage import OpStorageWrapper
 
@@ -89,14 +91,19 @@ def oidc_provider_init_app(name=None, config=None):
     if config:
         app.config.update(config)
 
+    # Initialize registry for plugin handling
+    r = Registry(app=app)
+    r['packages'] = PackageRegistry(app)
+    r['extensions'] = ExtensionRegistry(app)
+    r['config'] = ConfigurationRegistry(app)
+    r['blueprints'] = BlueprintAutoDiscoveryRegistry(app=app)
+
     app.authn_requests = OpStorageWrapper(app.config['DB_URI'], 'authn_requests')
     app.users = OpStorageWrapper(app.config['DB_URI'], 'userinfo')
     app.authn_response_queue = init_authn_response_queue(app.config)
 
     from .views.oidc_provider import oidc_provider_views
     app.register_blueprint(oidc_provider_views)
-    from .views.vetting_process import vetting_process_views
-    app.register_blueprint(vetting_process_views)
 
     # Initialize the oidc_provider after views to be able to set correct urls
     app.provider = init_oidc_provider(app)

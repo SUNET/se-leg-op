@@ -11,3 +11,6 @@ PROVIDER_SIGNING_KEY = {
 }
 
 PROVIDER_SUBJECT_IDENTIFIER_HASH_SALT = 'test_salt'
+
+# The original vetting process needs to be loaded to test the full flow of the app
+PACKAGES = ['se_leg_op.plugins.se_leg_vetting_process']

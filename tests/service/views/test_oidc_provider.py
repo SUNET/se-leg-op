@@ -21,6 +21,10 @@ TEST_CLIENT_SECRET = 'secret'
 TEST_REDIRECT_URI = 'https://client.example.com/redirect_uri'
 TEST_USER_ID = 'user1'
 
+POST_AUTH_TEST_CLIENT_ID = 'client2'
+POST_AUTH_TEST_CLIENT_SECRET = 'secret'
+POST_AUTH_TEST_REDIRECT_URI = 'https://client2.example.com/redirect_uri'
+
 
 @pytest.fixture
 def authn_request_args():
@@ -32,6 +36,16 @@ def authn_request_args():
         'nonce': 'nonce'
     }
 
+@pytest.fixture
+def post_auth_authn_request_args():
+    return {
+        'client_id': POST_AUTH_TEST_CLIENT_ID,
+        'redirect_uri': POST_AUTH_TEST_REDIRECT_URI,
+        'response_type': 'code',
+        'scope': 'openid',
+        'nonce': 'nonce',
+        'token': 'token'
+    }
 
 @pytest.mark.usefixtures('inject_app')
 class TestConfiguration(object):
@@ -78,6 +92,11 @@ class TestAuthenticationEndpoint(object):
             'redirect_uris': [TEST_REDIRECT_URI],
             'response_types': ['code'],
         }
+        client_db[POST_AUTH_TEST_CLIENT_ID] = {
+            'redirect_uris': [POST_AUTH_TEST_REDIRECT_URI],
+            'response_types': ['code'],
+            'vetting_policy': 'POST_AUTH'
+        }
         self.app.provider.clients = client_db
 
     def test_authentication_endpoint(self, authn_request_args):
@@ -86,6 +105,15 @@ class TestAuthenticationEndpoint(object):
         resp = self.app.test_client().post('/authentication', data=authn_request_args)
         assert resp.status_code == 200
         assert self.app.authn_requests[nonce] == authn_request_args
+
+    def test_authentication_endpoint_post_auth(self, post_auth_authn_request_args):
+        nonce = post_auth_authn_request_args['nonce']
+
+        resp = self.app.test_client().post('/authentication', data=post_auth_authn_request_args)
+        assert resp.status_code == 200
+        assert 'user_id' in self.app.authn_requests[nonce]
+        post_auth_authn_request_args['user_id'] = self.app.authn_requests[nonce]['user_id']
+        assert self.app.authn_requests[nonce] == post_auth_authn_request_args
 
     @responses.activate
     def test_error_response(self, authn_request_args):
@@ -101,6 +129,12 @@ class TestAuthenticationEndpoint(object):
         self.force_send_all_queued_messages()
         parsed = urlparse(responses.calls[0].request.url)
         assert dict(parse_qsl(parsed.query)) == {'error': 'invalid_request', 'error_message': 'test'}
+
+    def test_error_response_no_token_post_auth(self, post_auth_authn_request_args):
+        post_auth_authn_request_args.pop('token')
+        resp = self.app.test_client().post('/authentication', data=post_auth_authn_request_args)
+        assert resp.status_code == 400
+        assert b'Token missing' in resp.data
 
     @responses.activate
     def test_fragment_encoded_error_response(self, authn_request_args):
