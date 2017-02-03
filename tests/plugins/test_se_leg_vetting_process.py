@@ -7,21 +7,22 @@ from rq.worker import SimpleWorker
 
 from se_leg_op.storage import OpStorageWrapper
 
-TEST_CLIENT_ID = 'client2'
+TEST_CLIENT_ID = 'client1'
 TEST_CLIENT_SECRET = 'secret'
-TEST_REDIRECT_URI = 'https://client2.example.com/redirect_uri'
+TEST_REDIRECT_URI = 'https://client.example.com/redirect_uri'
 
-TEST_USER_ID = 'user2'
+TEST_USER_ID = 'user1'
 
-VETTING_RESULT_ENDPOINT = '/yubico/vetting-result'
-VETTING_DATA = {'placeholder': 'data'}
+EXTRA_CONFIG = {
+    'PACKAGES': ['se_leg_op.plugins.se_leg_vetting_process']
+}
+
 
 @pytest.fixture
 def authn_request_args():
     return {
         'client_id': TEST_CLIENT_ID,
         'redirect_uri': TEST_REDIRECT_URI,
-        'user_id': TEST_USER_ID,
         'response_type': 'code',
         'scope': 'openid',
         'nonce': 'nonce',
@@ -38,8 +39,7 @@ class TestVettingResultEndpoint(object):
         client_db[TEST_CLIENT_ID] = {
             'redirect_uris': [TEST_REDIRECT_URI],
             'client_secret': TEST_CLIENT_SECRET,
-            'response_types': ['code'],
-            'vetting_policy': 'POST_AUTH'
+            'response_types': ['code']
         }
         self.app.provider.clients = client_db
 
@@ -48,38 +48,34 @@ class TestVettingResultEndpoint(object):
         responses.add(responses.GET, TEST_REDIRECT_URI, status=200)
         nonce = authn_request_args['nonce']
         self.app.authn_requests[nonce] = authn_request_args
-        self.app.users[TEST_USER_ID] = {}
 
         token = 'token'
         qrdata = '1' + json.dumps({'nonce': nonce, 'token': token})
-        resp = self.app.test_client().post(VETTING_RESULT_ENDPOINT,
-                                           data={'qrcode': qrdata, 'data': json.dumps(VETTING_DATA)})
+        resp = self.app.test_client().post('/vetting-result', data={'qrcode': qrdata,
+                                                                    'identity': TEST_USER_ID})
 
         assert resp.status_code == 200
-        # verify the original authentication request is not removed
-        assert nonce in self.app.authn_requests
-        # verify the posted data ends up in the userinfo document
-        assert self.app.users[TEST_USER_ID]['vetting_results'][0]['data'] == VETTING_DATA
+        # verify the original authentication request has been handled
+        assert nonce not in self.app.authn_requests
+        assert self.app.users[TEST_USER_ID]['identity'] == TEST_USER_ID
 
-    # XXX: Remove after development
-    @responses.activate
-    def test_vetting_endpoint_development_nonce(self):
-        self.app.config['TEST_NONCE'] = 'test'
-        responses.add(responses.GET, TEST_REDIRECT_URI, status=200)
+        # force sending response from message queue from http://python-rq.org/docs/testing/
+        worker = SimpleWorker([self.app.authn_response_queue], connection=self.app.authn_response_queue.connection)
+        worker.work(burst=True)
 
-        token = 'token'
-        qrdata = '1' + json.dumps({'nonce': 'test', 'token': token})
-        resp = self.app.test_client().post(VETTING_RESULT_ENDPOINT,
-                                           data={'qrcode': qrdata, 'data': json.dumps(VETTING_DATA)})
-
-        assert resp.status_code == 200
+        # verify the authentication response has been sent to the client
+        parsed_response = dict(parse_qsl(urlparse(responses.calls[0].request.url).query))
+        assert 'code' in parsed_response
+        assert parsed_response['state'] == authn_request_args['state']
+        assert parsed_response['code'] in self.app.provider.authz_state.authorization_codes
+        assert responses.calls[0].request.headers['Authorization'] == 'Bearer ' + token
 
     @pytest.mark.parametrize('parameters', [
-        {'data': json.dumps(VETTING_DATA)},  # missing 'qrcode'
+        {'identity': TEST_USER_ID},  # missing 'qrcode'
         {'qrcode': 'nonce token'},  # missing 'identity'
     ])
     def test_vetting_endpoint_with_missing_data(self, parameters):
-        resp = self.app.test_client().post(VETTING_RESULT_ENDPOINT, data=parameters)
+        resp = self.app.test_client().post('/vetting-result', data=parameters)
         assert resp.status_code == 400
 
     @pytest.mark.parametrize('qrdata', [
@@ -90,11 +86,11 @@ class TestVettingResultEndpoint(object):
         '2{"token": "token", "nonce": "nonce"}'  # invalid qr version
     ])
     def test_vetting_endpoint_with_invalid_qr_data(self, authn_request_args, qrdata):
-        resp = self.app.test_client().post(VETTING_RESULT_ENDPOINT, data={'qrcode': qrdata,
-                                                                          'data': json.dumps(VETTING_DATA)})
+        resp = self.app.test_client().post('/vetting-result', data={'qrcode': qrdata,
+                                                                    'identity': TEST_USER_ID})
         assert resp.status_code == 400
 
     def test_unexpected_nonce(self):
-        resp = self.app.test_client().post(VETTING_RESULT_ENDPOINT, data={'qrcode': 'unexpected token',
-                                                                          'data': json.dumps(VETTING_DATA)})
+        resp = self.app.test_client().post('/vetting-result', data={'qrcode': 'unexpected token',
+                                                                    'identity': TEST_USER_ID})
         assert resp.status_code == 400

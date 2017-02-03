@@ -15,6 +15,9 @@ __author__ = 'lundberg'
 
 yubico_vetting_process_views = Blueprint('yubico_vetting_process', __name__, url_prefix='/yubico')
 
+# registry hook
+blueprints = [yubico_vetting_process_views]
+
 
 @yubico_vetting_process_views.route('/vetting-result', methods=['POST'])
 def vetting_result():

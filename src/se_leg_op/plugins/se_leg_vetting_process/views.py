@@ -8,12 +8,15 @@ from flask.helpers import make_response
 from oic.oic.message import AuthorizationRequest
 from pyop.util import should_fragment_encode
 
-from .oidc_provider import extra_userinfo
+from ...service.views.oidc_provider import extra_userinfo
 from ...service.response_sender import deliver_response_task
 from ...service.vetting_process_tools import parse_qrdata, InvalidQrDataError, create_authentication_response
 
 
 se_leg_vetting_process_views = Blueprint('se_leg_vetting_process', __name__, url_prefix='')
+
+# registry hook
+blueprints = [se_leg_vetting_process_views]
 
 
 @se_leg_vetting_process_views.route('/vetting-result', methods=['POST'])

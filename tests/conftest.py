@@ -165,6 +165,8 @@ def inject_app(request, tmpdir, mongodb_instance, redis_instance):
         'REDIS_URI': redis_instance.get_uri(),
         'PREFERRED_URL_SCHEME': 'https'
     }
+    extra_config = getattr(request.module, "EXTRA_CONFIG", {})
+    config.update(extra_config)
     app = oidc_provider_init_app(__name__, config=config)
     app.authn_response_queue.empty()
     request.instance.app = app
