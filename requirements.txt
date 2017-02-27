@@ -6,4 +6,4 @@ redis==2.10.5
 rq==0.5.6
 Flask-Registry==0.2.0
 pyjwkest
-mitek-mobile-verify --index https://pypi.nordu.net/simple/ mitek-mobile-verify
+--index https://pypi.nordu.net/simple/ mitek-mobile-verify
