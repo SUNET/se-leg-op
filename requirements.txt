@@ -1,6 +1,7 @@
 pyop==2.0.0
 Flask==0.10.1
 requests==2.9.1
+certifi
 pymongo==3.2.2
 redis==2.10.5
 rq==0.5.6
