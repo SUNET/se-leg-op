@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
-import time
 import flask
 import json
+import base64
 
 from flask.blueprints import Blueprint
 from flask.globals import current_app
@@ -11,7 +11,7 @@ from oic.oic.message import AuthorizationRequest
 
 from ...service.vetting_process_tools import parse_qrdata, InvalidQrDataError
 from .auth import authorize_client
-from .license_service import init_mobile_verify_service, verify_license_task
+from .license_service import verify_license
 
 __author__ = 'lundberg'
 
@@ -19,9 +19,6 @@ yubico_vetting_process_views = Blueprint('yubico_vetting_process', __name__, url
 
 # registry hook
 blueprints = [yubico_vetting_process_views]
-
-# Initialize the SOAP service
-current_app.verify_license_service = init_mobile_verify_service()
 
 
 @yubico_vetting_process_views.route('/vetting-result', methods=['POST'])
@@ -53,17 +50,17 @@ def vetting_result():
     try:
         vetting_data = json.loads(data)
         mibi_data = vetting_data['mibi_data']
-        front_image_data = vetting_data['front_image_data']
+        # The soap service wants to encode the image data so lets decode it here
+        front_image_data = base64.b64decode(vetting_data['front_image_data'])
         back_image_data = vetting_data['back_image_data']
-    except json.JSONDecodeError:
+    except ValueError:
         current_app.logger.debug('Received malformed json \'%s\'', data)
         return make_response('Malformed json data', 400)
     except KeyError as e:
         current_app.logger.debug('Missing vetting data: \'%s\'', e)
         return make_response('Missing vetting data: {}'.format(e), 400)
 
-    current_app.mobile_verify_service_queue.enqueue(verify_license_task, auth_req, front_image_data, back_image_data,
-                                                    mibi_data)
+    verify_license(auth_req, front_image_data, back_image_data, mibi_data)
 
     return make_response('OK', 200)
 
