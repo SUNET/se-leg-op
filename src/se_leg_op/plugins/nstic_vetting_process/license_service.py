@@ -29,15 +29,15 @@ class LicenseService(object):
         return device_metadata, web_req_metadata, mibi_data
 
     @staticmethod
-    def create_request(front_image_data, back_image_data):
+    def create_request(front_image_data, barcode_data):
         req = PhotoVerifyRequest()
-        req.back_image = req.create_image(hints=[{'PDF417': back_image_data}])
+        req.back_image = req.create_image(hints=[{'PDF417': barcode_data}])
         req.front_image = req.create_image(image_data=front_image_data)
         return req
 
-    def verify(self, front_image_data, back_image_data, mibi_data):
+    def verify(self, front_image_data, barcode_data, mibi_data):
         device_metadata, web_req_metadata, mibi_data = self.create_headers(mibi_data)
-        req = self.create_request(front_image_data, back_image_data)
+        req = self.create_request(front_image_data, barcode_data)
         logger.info('Trying to make LicenseService verify call to soap service')
         response = self.soap_service.verify(req, device_metadata, web_req_metadata, mibi_data)
         logger.info('Returning response from soap service')
@@ -50,14 +50,13 @@ def setup_app(app):
     username = app.config['MOBILE_VERIFY_USERNAME']
     password = app.config['MOBILE_VERIFY_PASSWORD']
     tenant_reference_number = app.config['MOBILE_VERIFY_TENANT_REF']
-    # Add initialized objects to app
     app.license_service = LicenseService(wsdl, username, password, tenant_reference_number)
 
 
-def verify_license(auth_req, front_image_data, back_image_data, mibi_data):
+def verify_license(auth_req, front_image_data, barcode, mibi_data):
 
     user_id = auth_req['user_id']
-    response = current_app.license_service.verify(front_image_data, back_image_data, mibi_data)
+    response = current_app.license_service.verify(front_image_data, barcode, mibi_data)
 
     logger.debug('Parsed response:')
     logger.debug(response)
