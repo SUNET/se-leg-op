@@ -1,9 +1,11 @@
-import json
-from urllib.parse import parse_qsl, urlparse
+
 
 import pytest
 import responses
-from rq.worker import SimpleWorker
+import datetime
+import json
+from unittest import mock
+from urllib import parse
 
 from se_leg_op.storage import OpStorageWrapper
 
@@ -14,10 +16,174 @@ TEST_REDIRECT_URI = 'https://client2.example.com/redirect_uri'
 TEST_USER_ID = 'user2'
 
 VETTING_RESULT_ENDPOINT = '/yubico/vetting-result'
-VETTING_DATA = {'placeholder': 'data'}
+VETTING_DATA = {
+    "mibi": {
+        "MibiVersion": "1.5",
+        "Autocapture": "1",
+        "Device": "angler",
+        "Document":
+            "DRIVER_LICENSE",
+        "Torch": "OFF",
+        "ImageWidth": "1920",
+        "ImageHeight": "1080",
+        "1080p": "true",
+        "720p": "true",
+        "AutoFocus": "true",
+        "ContVideoFocus": "true",
+        "ContPictureFocus": "true",
+        "Manufacturer": "Huawei",
+        "MiSnapVersion": "3.1",
+        "SDKVersion": "MiSnap3.1",
+        "Model": "Nexus 6P",
+        "Orientation": "PORTRAIT_UPSIDE_DOWN",
+        "OS": "6.0",
+        "Platform": "Android",
+        "MiSnapResultCode": "SuccessVideo",
+        "UXP": [
+            {"RL": [2423]},
+            {"FO": [2447]},
+            {"SA": [2766]},
+            {"FF": [2840]},
+            {"MC": [2965, 0]},
+            {"IB": [2966]},
+            {"NF": [2966, 0]},
+            {"MC": [3105, 0]},
+            {"NF": [3105, 0]},
+            {"MC": [3305, 93]},
+            {"RR": [3428]},
+            {"MC": [3478, 99]},
+            {"CF": [3482, 555]},
+            {"MC": [3639, 99]},
+            {"CF": [3639, 578]},
+            {"MC": [3791, 99]},
+            {"CF": [3791, 560]},
+            {"MC": [3923, 100]},
+            {"CF": [3924, 546]},
+            {"MC": [4041, 0]},
+            {"MC": [4158, 99]},
+            {"MC": [4243, 0]},
+            {"MC": [4326, 0]},
+            {"NF": [4327, 0]},
+            {"MC": [4392, 0]},
+            {"NF": [4393, 0]},
+            {"MC": [4529, 100]},
+            {"MC": [4719, 100]},
+            {"CF": [4722, 558]},
+            {"MC": [4931, 100]},
+            {"CF": [4931, 559]},
+            {"MC": [5183, 100]},
+            {"CF": [5183, 577]},
+            {"MC": [5409, 100]},
+            {"CF": [5409, 584]},
+            {"MC": [5657, 100]},
+            {"MV": [5658]},
+            {"MT": [5660]},
+            {"MA": [5660, 3]},
+            {"MB": [5660, 521]},
+            {"MS": [5660, 530]},
+            {"MW": [5660, 603]},
+            {"MT": [5660]},
+            {"DR": [5661]}
+        ],
+        "Parameters": {
+            "MiSnapDocumentType": "DRIVER_LICENSE",
+            "MiSnapCaptureMode": "2"
+        },
+        "Changed Parameters": {}
+    },
+    "encodedData": "ZnJvbnRfaW1hZ2U=",
+    "barcode": "YmFyY29kZQ== ZGF0YQ=="
+}
+SUCCESSFUL_SOAP_RESPONSE = {
+    'header': {
+        'Metadata': {
+            'SessionReferenceId': 'SessionReferenceId',
+            'TransactionReferenceId': 123456789,
+            'XIPVersion': '2.4'
+        }
+    },
+    'body': {
+        'Response': {
+            'Errors': None,
+            'Images': None,
+            'Status': 'Successful',
+            'MoreData': {},
+            'ExtractedData': {
+                'Address': {
+                    'Address1': 'ADDRESS',
+                    'AddressLine2': None,
+                    'AptNumber': None,
+                    'City': 'CITY',
+                    'POBox': None,
+                    'StateAbbr': 'ST',
+                    'StreetName': 'STREET NAME',
+                    'StreetNumber': '123',
+                    'Zip': '12345-1234'
+                },
+                'Class': 'R',
+                'Dob': datetime.datetime(1989, 3, 16, 0, 0),
+                'ExpirationDate': datetime.datetime(2016, 3, 16, 0, 0),
+                'Id': '123123123',
+                'IssueDate': datetime.datetime(2009, 2, 7, 0, 0),
+                'Name': {
+                    'FirstName': 'JANE',
+                    'LastName': 'MOON',
+                    'MiddleName': 'SHERRY',
+                    'Suffix': None
+                },
+                'Sex': 'F',
+                'State': {
+                    'Abbreviation': 'ST',
+                    'Name': 'State'
+                }
+            },
+            'ComparisonResult': {
+                'MoreData': {},
+                'DataMatchScore': 1000
+            }
+        }
+    }
+}
+
+SUCCESSFUL_VETTING_RESULT = {
+    'extracted_data': {
+        'Sex': 'F',
+        'ExpirationDate': datetime.datetime(2016, 3, 16, 0, 0),
+        'Id': '123123123', 'Dob': datetime.datetime(1989, 3, 16, 0, 0),
+        'Class': 'R',
+        'Name': {
+            'FirstName': 'JANE',
+            'Suffix': None,
+            'MiddleName': 'SHERRY',
+            'LastName': 'MOON'
+        },
+        'State': {
+            'Name': 'State',
+            'Abbreviation': 'ST'
+        },
+        'IssueDate': datetime.datetime(2009, 2, 7, 0, 0),
+        'Address': {
+            'POBox': None,
+            'AptNumber': None,
+            'City': 'CITY',
+            'StateAbbr': 'ST',
+            'AddressLine2': None,
+            'StreetNumber': '123',
+            'Zip': '12345-1234',
+            'StreetName': 'STREET NAME',
+            'Address1': 'ADDRESS'
+        }
+    },
+    'data_match_score': 1000
+}
 
 EXTRA_CONFIG = {
-    'PACKAGES': ['se_leg_op.plugins.nstic_vetting_process']
+    'PACKAGES': ['se_leg_op.plugins.nstic_vetting_process'],
+    'EXTENSIONS': ['se_leg_op.plugins.nstic_vetting_process.license_service'],
+    'MOBILE_VERIFY_WSDL': 'https://localhost/wsdl',
+    'MOBILE_VERIFY_USERNAME': 'soap_user',
+    'MOBILE_VERIFY_PASSWORD': 'secret',
+    'MOBILE_VERIFY_TENANT_REF': 'tenant_ref'
 }
 
 
@@ -34,7 +200,22 @@ def authn_request_args():
     }
 
 
-@pytest.mark.usefixtures('inject_app', 'create_client_in_db')
+@pytest.fixture
+def vetting_data():
+    return parse.quote(json.dumps(VETTING_DATA))
+
+
+@pytest.yield_fixture
+def mock_soap_client():
+    patcher = mock.patch('se_leg_op.plugins.nstic_vetting_process.license_service.MitekMobileVerifyService',
+                         new=mock.Mock)
+    soap_client = patcher.start()
+    soap_client.verify = mock.Mock(return_value=SUCCESSFUL_SOAP_RESPONSE)
+    yield soap_client
+    patcher.stop()
+
+
+@pytest.mark.usefixtures('mock_soap_client', 'inject_app', 'create_client_in_db')
 class TestVettingResultEndpoint(object):
     @pytest.fixture
     def create_client_in_db(self, request):
@@ -49,7 +230,7 @@ class TestVettingResultEndpoint(object):
         self.app.provider.clients = client_db
 
     @responses.activate
-    def test_vetting_endpoint(self, authn_request_args):
+    def test_vetting_endpoint(self, authn_request_args, vetting_data):
         responses.add(responses.GET, TEST_REDIRECT_URI, status=200)
         nonce = authn_request_args['nonce']
         self.app.authn_requests[nonce] = authn_request_args
@@ -57,25 +238,24 @@ class TestVettingResultEndpoint(object):
 
         token = 'token'
         qrdata = '1' + json.dumps({'nonce': nonce, 'token': token})
-        resp = self.app.test_client().post(VETTING_RESULT_ENDPOINT,
-                                           data={'qrcode': qrdata, 'data': json.dumps(VETTING_DATA)})
+        resp = self.app.test_client().post(VETTING_RESULT_ENDPOINT, data={'qrcode': qrdata, 'data': vetting_data})
 
         assert resp.status_code == 200
         # verify the original authentication request is not removed
         assert nonce in self.app.authn_requests
         # verify the posted data ends up in the userinfo document
-        assert self.app.users[TEST_USER_ID]['vetting_results'][0]['data'] == VETTING_DATA
+        # Just check keys as the datetimes are different due to mongodb
+        assert self.app.users[TEST_USER_ID]['vetting_results'][0]['data'].keys() == SUCCESSFUL_VETTING_RESULT.keys()
 
     # XXX: Remove after development
     @responses.activate
-    def test_vetting_endpoint_development_nonce(self):
+    def test_vetting_endpoint_development_nonce(self, vetting_data):
         self.app.config['TEST_NONCE'] = 'test'
         responses.add(responses.GET, TEST_REDIRECT_URI, status=200)
 
         token = 'token'
         qrdata = '1' + json.dumps({'nonce': 'test', 'token': token})
-        resp = self.app.test_client().post(VETTING_RESULT_ENDPOINT,
-                                           data={'qrcode': qrdata, 'data': json.dumps(VETTING_DATA)})
+        resp = self.app.test_client().post(VETTING_RESULT_ENDPOINT, data={'qrcode': qrdata, 'data': vetting_data})
 
         assert resp.status_code == 200
 
@@ -94,12 +274,11 @@ class TestVettingResultEndpoint(object):
         '1{"nonce": "nonce"}',  # missing 'token'
         '2{"token": "token", "nonce": "nonce"}'  # invalid qr version
     ])
-    def test_vetting_endpoint_with_invalid_qr_data(self, authn_request_args, qrdata):
-        resp = self.app.test_client().post(VETTING_RESULT_ENDPOINT, data={'qrcode': qrdata,
-                                                                          'data': json.dumps(VETTING_DATA)})
+    def test_vetting_endpoint_with_invalid_qr_data(self, qrdata, vetting_data):
+        resp = self.app.test_client().post(VETTING_RESULT_ENDPOINT, data={'qrcode': qrdata, 'data': vetting_data})
         assert resp.status_code == 400
 
     def test_unexpected_nonce(self):
         resp = self.app.test_client().post(VETTING_RESULT_ENDPOINT, data={'qrcode': 'unexpected token',
-                                                                          'data': json.dumps(VETTING_DATA)})
+                                                                          'data': vetting_data})
         assert resp.status_code == 400

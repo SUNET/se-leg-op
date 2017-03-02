@@ -1,15 +1,18 @@
 # -*- coding: utf-8 -*-
 
-import time
 import flask
 import json
-from functools import wraps
+import base64
+import urllib
+
 from flask.blueprints import Blueprint
 from flask.globals import current_app
 from flask.helpers import make_response
 from oic.oic.message import AuthorizationRequest
 
 from ...service.vetting_process_tools import parse_qrdata, InvalidQrDataError
+from .auth import authorize_client
+from .license_service import verify_license
 
 __author__ = 'lundberg'
 
@@ -43,43 +46,45 @@ def vetting_result():
         return make_response('Unknown nonce', 400)
 
     auth_req = AuthorizationRequest(**auth_req_data)
-    user_id = auth_req['user_id']
 
-    # TODO Use vetting data to verify a users drivers license
-    vetting_data = json.loads(data)
+    # Check vetting data received
+    try:
+        unquoted_data = urllib.parse.unquote(data)
+        vetting_data = json.loads(unquoted_data)
+        mibi_data = json.dumps(vetting_data['mibi'])
+        # The soap service wants to encode the image data so lets decode it here
+        front_image_data = base64.b64decode(vetting_data['encodedData'])
+        barcode_data = vetting_data['barcode']
+    except ValueError:
+        current_app.logger.error('Received malformed json \'%s\'', unquoted_data)
+        return make_response('Malformed json data', 400)
+    except KeyError as e:
+        current_app.logger.error('Missing vetting data: \'%s\'', e)
+        return make_response('Missing vetting data: {}'.format(e), 400)
 
-    # TODO store necessary user info
-    userinfo = current_app.users[user_id]
-    if 'vetting_results' not in userinfo:
-        userinfo = {'vetting_results': []}
-    userinfo['vetting_results'].append({'vetting_time': time.time(), 'data': vetting_data})
-    current_app.users[user_id] = userinfo
+    verify_license(auth_req, front_image_data, barcode_data, mibi_data)
 
     return make_response('OK', 200)
 
 
+# XXX: Remove after development
 def development_license_check(data):
     # TODO: What do we want to do here?
     current_app.logger.debug('Test data received: {}'.format(data))
-
-
-def authorize_client(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if flask.request.authorization:
-            client_id = flask.request.authorization['username']
-            password = flask.request.authorization['password']
-            current_app.logger.info('Trying to authorize {}'.format(client_id))
-            try:
-                client = current_app.provider.clients[client_id]
-                if client['client_secret'] == password:
-                    kwargs['client_id'] = client_id
-                    return f(*args, **kwargs)
-                current_app.logger.error('Authorization failure: Wrong password for {}'.format(client_id))
-            except KeyError as e:
-                current_app.logger.error('Authorization failure: KeyError {}'.format(e))
-        flask.abort(401)
-    return decorated_function
+    try:
+        unquoted_data = urllib.parse.unquote(data)
+        current_app.logger.debug('Test data unquoted: {}'.format(unquoted_data))
+    except Exception as e:
+        current_app.logger.error('Unquoting test data failed:')
+        current_app.logger.error(e)
+        return make_response('Malformed urlquoted data', 400)
+    try:
+        vetting_data = json.loads(unquoted_data)
+        current_app.logger.debug('Test data json parsed: {}'.format(vetting_data))
+    except ValueError as e:
+        current_app.logger.error('Received malformed json:')
+        current_app.logger.error(e)
+        return make_response('Malformed json data', 400)
 
 
 @yubico_vetting_process_views.route('/vettings', methods=['GET'])
