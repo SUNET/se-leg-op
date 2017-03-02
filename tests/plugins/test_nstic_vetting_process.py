@@ -258,6 +258,28 @@ class TestVettingResultEndpoint(object):
         resp = self.app.test_client().post(VETTING_RESULT_ENDPOINT, data={'qrcode': qrdata, 'data': vetting_data})
 
         assert resp.status_code == 200
+    # XXX: End remove after development
+
+    @pytest.mark.parametrize('malformed_vetting_data', [
+        '',  # no data
+        '{"test": "{"malformed": "data"}"',  # invalid json
+        '{"encodedData":"", "barcode":""}',  # missing 'mibi'
+        '{"mibi": "", "barcode":""}',  # missing 'encodedData'
+        '{"mibi": "", "encodedData":""}',  # missing 'barcode'
+    ])
+    @responses.activate
+    def test_vetting_endpoint_malformed_json(self, authn_request_args, malformed_vetting_data):
+        nonce = authn_request_args['nonce']
+        self.app.authn_requests[nonce] = authn_request_args
+        responses.add(responses.GET, TEST_REDIRECT_URI, status=200)
+
+        token = 'token'
+        qrdata = '1' + json.dumps({'nonce': 'test', 'token': token})
+        malformed_vetting_data = '{"test": "{"malformed": "data"}"'
+        resp = self.app.test_client().post(VETTING_RESULT_ENDPOINT, data={'qrcode': qrdata,
+                                                                          'data': malformed_vetting_data})
+
+        assert resp.status_code == 400
 
     @pytest.mark.parametrize('parameters', [
         {'data': json.dumps(VETTING_DATA)},  # missing 'qrcode'
