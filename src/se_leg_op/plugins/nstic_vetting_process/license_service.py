@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
 
-from flask import current_app
 import time
 import logging
+import json
+import base64
+from flask import current_app
 
 from mitek_mobile_verify.services import MitekMobileVerifyService
 from mitek_mobile_verify.plugins import DoctorPlugin
@@ -51,6 +53,23 @@ def setup_app(app):
     password = app.config['MOBILE_VERIFY_PASSWORD']
     tenant_reference_number = app.config['MOBILE_VERIFY_TENANT_REF']
     app.license_service = LicenseService(wsdl, username, password, tenant_reference_number)
+
+
+def parse_vetting_data(data):
+    """
+    :param data: JSON string
+    :type data: str
+    :return: parsed data
+    :rtype: dict
+    """
+    parsed_data = {}
+    vetting_data = json.loads(data)
+    # The soap service wants the mibi data in a json string
+    parsed_data['mibi_data'] = json.dumps(vetting_data['mibi'])
+    # The soap service wants to encode the image data so lets decode it here
+    parsed_data['front_image_data'] = base64.b64decode(vetting_data['encodedData'])
+    parsed_data['barcode_data'] = vetting_data['barcode']
+    return parsed_data
 
 
 def verify_license(auth_req, front_image_data, barcode, mibi_data):
