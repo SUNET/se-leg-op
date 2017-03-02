@@ -3,6 +3,7 @@
 import flask
 import json
 import base64
+import urllib
 
 from flask.blueprints import Blueprint
 from flask.globals import current_app
@@ -48,26 +49,42 @@ def vetting_result():
 
     # Check vetting data received
     try:
-        vetting_data = json.loads(data)
-        mibi_data = vetting_data['mibi_data']
+        unquoted_data = urllib.parse.unquote(data)
+        vetting_data = json.loads(unquoted_data)
+        mibi_data = json.dumps(vetting_data['mibi'])
         # The soap service wants to encode the image data so lets decode it here
-        front_image_data = base64.b64decode(vetting_data['front_image_data'])
-        back_image_data = vetting_data['back_image_data']
+        front_image_data = base64.b64decode(vetting_data['encodedData'])
+        barcode_data = vetting_data['barcode']
     except ValueError:
-        current_app.logger.debug('Received malformed json \'%s\'', data)
+        current_app.logger.error('Received malformed json \'%s\'', unquoted_data)
         return make_response('Malformed json data', 400)
     except KeyError as e:
-        current_app.logger.debug('Missing vetting data: \'%s\'', e)
+        current_app.logger.error('Missing vetting data: \'%s\'', e)
         return make_response('Missing vetting data: {}'.format(e), 400)
 
-    verify_license(auth_req, front_image_data, back_image_data, mibi_data)
+    verify_license(auth_req, front_image_data, barcode_data, mibi_data)
 
     return make_response('OK', 200)
 
 
+# XXX: Remove after development
 def development_license_check(data):
     # TODO: What do we want to do here?
     current_app.logger.debug('Test data received: {}'.format(data))
+    try:
+        unquoted_data = urllib.parse.unquote(data)
+        current_app.logger.debug('Test data unquoted: {}'.format(unquoted_data))
+    except Exception as e:
+        current_app.logger.error('Unquoting test data failed:')
+        current_app.logger.error(e)
+        return make_response('Malformed urlquoted data', 400)
+    try:
+        vetting_data = json.loads(unquoted_data)
+        current_app.logger.debug('Test data json parsed: {}'.format(vetting_data))
+    except ValueError as e:
+        current_app.logger.error('Received malformed json:')
+        current_app.logger.error(e)
+        return make_response('Malformed json data', 400)
 
 
 @yubico_vetting_process_views.route('/vettings', methods=['GET'])
