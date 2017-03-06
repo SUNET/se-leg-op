@@ -1,10 +1,12 @@
 # -*- coding: utf-8 -*-
 
-import time
 import logging
 import json
 import base64
-from flask import current_app
+import redis
+from redis import StrictRedis, sentinel
+import rq
+
 
 from mitek_mobile_verify.services import MitekMobileVerifyService
 from mitek_mobile_verify.plugins import DoctorPlugin
@@ -46,13 +48,24 @@ class LicenseService(object):
         return response
 
 
-# Hook for flask-registry
+# Hook for flask-registry extensions
 def setup_app(app):
-    wsdl = app.config['MOBILE_VERIFY_WSDL']
-    username = app.config['MOBILE_VERIFY_USERNAME']
-    password = app.config['MOBILE_VERIFY_PASSWORD']
-    tenant_reference_number = app.config['MOBILE_VERIFY_TENANT_REF']
-    app.license_service = LicenseService(wsdl, username, password, tenant_reference_number)
+    app.mobile_verify_service_queue = init_mobile_verify_service_queue(app.config)
+
+
+def init_mobile_verify_service_queue(config):
+    if config.get('REDIS_SENTINEL_HOSTS') and config.get('REDIS_SENTINEL_SERVICE_NAME'):
+        _port = config['REDIS_PORT']
+        _hosts = config['REDIS_SENTINEL_HOSTS']
+        _name = config['REDIS_SENTINEL_SERVICE_NAME']
+        host_port = [(x, _port) for x in _hosts]
+        manager = sentinel.Sentinel(host_port, socket_timeout=0.1)
+        pool = sentinel.SentinelConnectionPool(_name, manager)
+    else:
+        pool = redis.ConnectionPool.from_url(config['REDIS_URI'])
+
+    connection = StrictRedis(connection_pool=pool)
+    return rq.Queue('mobile_verify_service_queue', connection=connection)
 
 
 def parse_vetting_data(data):
@@ -70,34 +83,3 @@ def parse_vetting_data(data):
     parsed_data['front_image_data'] = base64.b64decode(vetting_data['encodedData'])
     parsed_data['barcode_data'] = vetting_data['barcode']
     return parsed_data
-
-
-def verify_license(auth_req, front_image_data, barcode, mibi_data):
-
-    user_id = auth_req['user_id']
-    response = current_app.license_service.verify(front_image_data, barcode, mibi_data)
-
-    logger.debug('Parsed response:')
-    logger.debug(response)
-
-    # TODO: Log verification attempt
-    # TODO: Use response['header']['Metadata']['TransactionReferenceId'],
-    # TODO: response['header']['Metadata']['SessionReferenceId'] and auth_req
-
-    if not response['body']['Response']['Errors'] is None:
-        logger.error('Verify license failed:')
-        logger.error(response['body']['Response']['Errors'])
-        # TODO: Do we want to add this to userinfo?
-        return
-
-    # Successful response received, save the verification response
-    userinfo = current_app.users[user_id]
-    if 'vetting_results' not in userinfo:
-        userinfo = {'vetting_results': []}
-
-    data = {
-        'extracted_data': response['body']['Response']['ExtractedData'],
-        'data_match_score': response['body']['Response']['ComparisonResult']['DataMatchScore']
-    }
-    userinfo['vetting_results'].append({'vetting_time': time.time(), 'data': data})
-    current_app.users[user_id] = userinfo

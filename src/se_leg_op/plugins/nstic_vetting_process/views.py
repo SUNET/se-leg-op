@@ -9,7 +9,8 @@ from urllib import parse as urllib_parse
 
 from ...service.vetting_process_tools import parse_qrdata, InvalidQrDataError
 from .auth import authorize_client
-from .license_service import parse_vetting_data, verify_license
+from .license_service import parse_vetting_data
+from .license_service_worker import verify_license
 
 __author__ = 'lundberg'
 
@@ -44,6 +45,7 @@ def vetting_result():
         return make_response('Unknown nonce', 400)
 
     auth_req = AuthorizationRequest(**auth_req_data)
+    user_id = auth_req['user_id']
 
     try:
         # Check vetting data received
@@ -55,8 +57,8 @@ def vetting_result():
         current_app.logger.error('Missing vetting data: \'{}\''.format(e))
         return make_response('Missing vetting data: {}'.format(e), 400)
 
-    verify_license(auth_req, parsed_data['front_image_data'], parsed_data['barcode_data'], parsed_data['mibi_data'])
-
+    current_app.mobile_verify_service_queue.enqueue(verify_license, user_id, parsed_data['front_image_data'],
+                                                    parsed_data['barcode_data'], parsed_data['mibi_data'])
     return make_response('OK', 200)
 
 

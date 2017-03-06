@@ -1,13 +1,17 @@
 
-
 import pytest
 import responses
 import datetime
 import json
+import pkg_resources
+from os import path
+from tempfile import NamedTemporaryFile
 from unittest import mock
 from urllib import parse
+from rq import SimpleWorker
 
 from se_leg_op.storage import OpStorageWrapper
+from tests.conftest import inject_app as main_inject_app
 
 TEST_CLIENT_ID = 'client2'
 TEST_CLIENT_SECRET = 'secret'
@@ -177,14 +181,51 @@ SUCCESSFUL_VETTING_RESULT = {
     'data_match_score': 1000
 }
 
-EXTRA_CONFIG = {
-    'PACKAGES': ['se_leg_op.plugins.nstic_vetting_process'],
-    'EXTENSIONS': ['se_leg_op.plugins.nstic_vetting_process.license_service'],
-    'MOBILE_VERIFY_WSDL': 'https://localhost/wsdl',
-    'MOBILE_VERIFY_USERNAME': 'soap_user',
-    'MOBILE_VERIFY_PASSWORD': 'secret',
-    'MOBILE_VERIFY_TENANT_REF': 'tenant_ref'
-}
+
+@pytest.yield_fixture
+def config_envvar(mongodb_instance, redis_instance):
+    config_values = {
+        'basepath': path.dirname(pkg_resources.resource_filename(__name__, '../service/app_config.py')),
+        'db_uri': mongodb_instance.get_uri(),
+        'redis_uri': redis_instance.get_uri()
+    }
+    config_content = """
+import os
+
+TESTING = True
+SERVER_NAME = "localhost:5000"
+
+basepath = '{basepath}'
+
+PROVIDER_SIGNING_KEY = {{
+    'PATH': os.path.join(basepath, 'private.pem'),
+    'KID': 'test_kid'
+}}
+
+PROVIDER_SUBJECT_IDENTIFIER_HASH_SALT = 'test_salt'
+
+PACKAGES = ['se_leg_op.plugins.nstic_vetting_process']
+EXTENSIONS = ['se_leg_op.plugins.nstic_vetting_process.license_service']
+
+MOBILE_VERIFY_WSDL = 'https://localhost/wsdl'
+MOBILE_VERIFY_USERNAME = 'soap_user'
+MOBILE_VERIFY_PASSWORD = 'secret'
+MOBILE_VERIFY_TENANT_REF = 'tenant_ref'
+
+DB_URI = '{db_uri}'
+REDIS_URI = '{redis_uri}'
+PREFERRED_URL_SCHEME = 'https'
+    """.format(**config_values)
+    config_file = NamedTemporaryFile()
+    config_file.write(bytes(config_content, 'utf-8'))
+    config_file.flush()
+    yield config_file.name
+
+
+@pytest.fixture
+def inject_app(request, tmpdir, mongodb_instance, redis_instance, config_envvar):
+    main_inject_app(request, tmpdir, mongodb_instance, redis_instance, config_envvar)
+    request.instance.app.mobile_verify_service_queue.empty()
 
 
 @pytest.fixture
@@ -215,7 +256,7 @@ def mock_soap_client():
     patcher.stop()
 
 
-@pytest.mark.usefixtures('mock_soap_client', 'inject_app', 'create_client_in_db')
+@pytest.mark.usefixtures('mock_soap_client', 'config_envvar', 'inject_app', 'create_client_in_db')
 class TestVettingResultEndpoint(object):
     @pytest.fixture
     def create_client_in_db(self, request):
@@ -228,6 +269,11 @@ class TestVettingResultEndpoint(object):
             'vetting_policy': 'POST_AUTH'
         }
         self.app.provider.clients = client_db
+
+    def force_send_all_queued_messages(self):
+        worker = SimpleWorker([self.app.mobile_verify_service_queue],
+                              connection=self.app.mobile_verify_service_queue.connection)
+        worker.work(burst=True)
 
     @responses.activate
     def test_vetting_endpoint(self, authn_request_args, vetting_data):
@@ -243,6 +289,8 @@ class TestVettingResultEndpoint(object):
         assert resp.status_code == 200
         # verify the original authentication request is not removed
         assert nonce in self.app.authn_requests
+        # Force processing if message queue
+        self.force_send_all_queued_messages()
         # verify the posted data ends up in the userinfo document
         # Just check keys as the datetimes are different due to mongodb
         assert self.app.users[TEST_USER_ID]['vetting_results'][0]['data'].keys() == SUCCESSFUL_VETTING_RESULT.keys()
@@ -275,7 +323,6 @@ class TestVettingResultEndpoint(object):
 
         token = 'token'
         qrdata = '1' + json.dumps({'nonce': 'test', 'token': token})
-        malformed_vetting_data = '{"test": "{"malformed": "data"}"'
         resp = self.app.test_client().post(VETTING_RESULT_ENDPOINT, data={'qrcode': qrdata,
                                                                           'data': malformed_vetting_data})
 
