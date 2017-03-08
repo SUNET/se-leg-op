@@ -73,6 +73,9 @@ def development_license_check(data):
         current_app.logger.error('Received malformed json:')
         current_app.logger.error(e)
         return make_response('Malformed json data', 400)
+    except KeyError as e:
+        current_app.logger.error('Missing vetting data: \'{}\''.format(e))
+        return make_response('Missing vetting data: {}'.format(e), 400)
 # XXX: End remove
 
 
