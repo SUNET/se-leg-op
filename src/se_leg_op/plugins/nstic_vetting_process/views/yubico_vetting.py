@@ -53,10 +53,17 @@ def vetting_result():
         current_app.logger.error('Missing vetting data: \'{}\''.format(e))
         return make_response('Missing vetting data: {}'.format(e), 400)
 
+    # Save information needed for the next vetting step that uses the api
+    current_app.yubico_states[auth_req['state']] = {
+        'created': time(),
+        'state': auth_req['state'],
+        'client_id': auth_req['client_id'],
+        'user_id': user_id
+    }
+
+    # Add soap license check to queue
     current_app.mobile_verify_service_queue.enqueue(verify_license, user_id, parsed_data['front_image_data'],
                                                     parsed_data['barcode_data'], parsed_data['mibi_data'])
-
-    # TODO: Remove authn request
 
     return make_response('OK', 200)
 
