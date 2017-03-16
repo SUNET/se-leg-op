@@ -6,6 +6,7 @@ from flask.globals import current_app
 from flask.helpers import make_response
 from oic.oic.message import AuthorizationRequest
 from urllib import parse as urllib_parse
+from time import time
 
 from se_leg_op.service.vetting_process_tools import parse_qrdata, InvalidQrDataError
 from ..license_service import parse_vetting_data
@@ -28,14 +29,12 @@ def vetting_result():
     except InvalidQrDataError as e:
         return make_response(str(e), 400)
 
-    try:
-        auth_req_data = current_app.authn_requests.pop(qrdata['nonce'])
-    except KeyError:
+    auth_req_data = current_app.authn_requests.pop(qrdata['nonce'])
+    if not auth_req_data:
         # XXX: Short circuit vetting process for special nonce during development
         if qrdata['nonce'] in current_app.config.get('TEST_NONCE', []):
             current_app.logger.debug('Found test nonce {}'.format(qrdata['nonce']))
-            development_license_check(data)
-            return make_response('OK', 200)
+            return development_license_check(data)
         # XXX: End remove later
         current_app.logger.debug('Received unknown nonce \'{}\''.format(qrdata['nonce']))
         return make_response('Unknown nonce', 400)
@@ -82,6 +81,7 @@ def development_license_check(data):
     except KeyError as e:
         current_app.logger.error('Missing vetting data: \'{}\''.format(e))
         return make_response('Missing vetting data: {}'.format(e), 400)
+    return make_response('OK', 200)
 # XXX: End remove
 
 
