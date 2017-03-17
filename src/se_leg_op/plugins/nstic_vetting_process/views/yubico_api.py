@@ -47,7 +47,7 @@ def update_db_state(state, data):
     # Don't let the client change the original keys
     # userinfo is not part of the state document in the db
     for ro_key in ['created', 'state', 'client_id', 'user_id', 'userinfo']:
-        data.pop(ro_key)
+        data.pop(ro_key, None)
     # Update state
     if data:
         state.update(data)
@@ -74,10 +74,9 @@ def get_states(client_id):
     current_app.logger.info('Client {} requested vetting states'.format(client_id))
     result = {'states': []}
     i = 0
-    for key, item in current_app.yubico_states.get_documents_by_attr('data.client_id', client_id, False):
+    for key, state in current_app.yubico_states.get_documents_by_attr('data.client_id', client_id, False):
         i += 1
-        state = {'state': item.get('state'), 'created': item.get('created')}
-        user_id = item.get('user_id')
+        user_id = state.get('user_id')
         try:
             userinfo = current_app.users[user_id]
         except KeyError:
@@ -93,12 +92,15 @@ def get_states(client_id):
 @authorize_client
 def get_state(client_id, state_id):
     current_app.logger.info('Client {} requested vetting state {}'.format(client_id, state_id))
-    state = current_app.yubico_states[state_id]
-    # Check if the client is allowed to fetch the state
-    if not client_id == state['client_id']:
-        current_app.logger.warning('Client {} tried to update unknown state {}'.format(client_id, state_id))
+    try:
+        state = current_app.yubico_states[state_id]
+        # Check if the client is allowed to fetch the state
+        if not client_id == state['client_id']:
+            raise KeyError
+    except KeyError:
+        current_app.logger.warning('Client {} tried to get unknown state {}'.format(client_id, state_id))
         return create_json_response({'status': 'Not Found', 'errors': [state_id]}, 404)
-    result = {'state': state.get('state'), 'created': state.get('created')}
+
     user_id = state.get('user_id')
     try:
         userinfo = current_app.users[user_id]
@@ -106,13 +108,15 @@ def get_state(client_id, state_id):
         current_app.logger.warning('userinfo {} missing for state {}'.format(user_id, state['state']))
         userinfo = None
     state['userinfo'] = userinfo
-    return create_json_response(result)
+    return create_json_response(state)
 
 
 @yubico_api_v1_views.route('/states', methods=['POST', 'PUT', 'PATCH'])
 @authorize_client
 def update_states(client_id):
     data = request.get_json()
+    if not data:
+        return create_json_response({'status': 'Bad Request', 'error': 'No data'}, status=400)
     current_app.logger.debug('data: {}'.format(data))
     client_states = dict(current_app.yubico_states.get_documents_by_attr('data.client_id', client_id, False))
     errors = []
@@ -128,7 +132,7 @@ def update_states(client_id):
         current_app.logger.info('Client {} updated states'.format(client_id))
     except KeyError as e:
         current_app.logger.error('{}'.format(e))
-        create_json_response({'status': 'Bad Request', 'error': '{}'.format(e)}, status=400)
+        return create_json_response({'status': 'Bad Request', 'error': '{}'.format(e)}, status=400)
     if errors:
         current_app.logger.warning('Client {} tried to update unknown states {}'.format(client_id, errors))
         return create_json_response({'status': 'Unprocessable Entity', 'errors': errors}, 422)
@@ -139,9 +143,12 @@ def update_states(client_id):
 @authorize_client
 def update_state(client_id, state_id):
     data = request.get_json()
-    state = current_app.yubico_states[state_id]
-    # Check if the client is allowed to update the state
-    if not client_id == state['client_id']:
+    try:
+        state = current_app.yubico_states[state_id]
+        # Check if the client is allowed to update the state
+        if not client_id == state['client_id']:
+            raise KeyError
+    except KeyError:
         current_app.logger.warning('Client {} tried to update unknown state {}'.format(client_id, state_id))
         return create_json_response({'status': 'Not Found', 'errors': [state_id]}, 404)
     # Update state and userinfo
@@ -154,10 +161,13 @@ def update_state(client_id, state_id):
 @yubico_api_v1_views.route('/states/<string:state_id>', methods=['DELETE'])
 @authorize_client
 def delete_state(client_id, state_id):
-    state = current_app.yubico_states[state_id]
-    # Check if the client is allowed to delete the state
-    if not client_id == state['client_id']:
-        current_app.logger.warning('Client {} tried to update unknown state {}'.format(client_id, state_id))
+    try:
+        state = current_app.yubico_states[state_id]
+        # Check if the client is allowed to delete the state
+        if not client_id == state['client_id']:
+            raise KeyError
+    except KeyError:
+        current_app.logger.warning('Client {} tried to delete unknown state {}'.format(client_id, state_id))
         return create_json_response({'status': 'Not Found', 'errors': [state_id]}, 404)
     del current_app.users[state['user_id']]
     del current_app.yubico_states[state_id]
