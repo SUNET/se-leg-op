@@ -6,7 +6,7 @@ import base64
 import redis
 from redis import StrictRedis, sentinel
 import rq
-
+from se_leg_op.storage import OpStorageWrapper
 
 from mitek_mobile_verify.services import MitekMobileVerifyService
 from mitek_mobile_verify.plugins import DoctorPlugin
@@ -50,6 +50,7 @@ class LicenseService(object):
 
 # Hook for flask-registry extensions
 def setup_app(app):
+    app.yubico_states = OpStorageWrapper(app.config['DB_URI'], 'yubico_states')
     app.mobile_verify_service_queue = init_mobile_verify_service_queue(app.config)
 
 

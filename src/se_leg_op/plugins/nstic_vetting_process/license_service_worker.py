@@ -34,6 +34,7 @@ def verify_license(user_id, front_image_data, barcode, mibi_data):
 
     # TODO: Log verification attempt
     # TODO: Use response['header']['Metadata']['TransactionReferenceId'],
+    # TODO: state, status code and confidence score
     # TODO: response['header']['Metadata']['SessionReferenceId'] and auth_req
 
     if not response['body']['Response']['Errors'] is None:
@@ -44,12 +45,9 @@ def verify_license(user_id, front_image_data, barcode, mibi_data):
 
     # Successful response received, save the verification response
     userinfo = users[user_id]
-    if 'vetting_results' not in userinfo:
-        userinfo = {'vetting_results': []}
-
     data = {
         'extracted_data': response['body']['Response']['ExtractedData'],
         'data_match_score': response['body']['Response']['ComparisonResult']['DataMatchScore']
     }
-    userinfo['vetting_results'].append({'vetting_time': time.time(), 'data': data})
+    userinfo['vetting_result'] = {'vetting_time': time.time(), 'data': data}
     users[user_id] = userinfo
