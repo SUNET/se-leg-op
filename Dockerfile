@@ -7,9 +7,9 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 WORKDIR /
 EXPOSE 5000
-VOLUME ["/op/etc"]
+VOLUME /op/etc
 
-RUN apt-get update && apt-get -yu dist-upgrade
+RUN apt-get update && apt-get -y dist-upgrade
 # for troubleshooting in the container
 RUN apt-get -y install \
     vim \
@@ -30,18 +30,22 @@ RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 RUN adduser --system --group seleg
 
 # Add Dockerfile to the container as documentation
-ADD Dockerfile /Dockerfile
+COPY Dockerfile /Dockerfile
 
 # revision.txt is dynamically updated by the CI for every build,
 # to ensure the statements below this point are executed every time
-ADD revision.txt /revision.txt
+COPY revision.txt /revision.txt
 
 RUN mkdir -p /op && virtualenv -p python3 /op/env
-ADD . /op/src
+COPY . /op/src
 RUN cd /op/src && \
     /op/env/bin/pip install -U pip && \
     /op/env/bin/pip install -r requirements.txt && \
     /op/env/bin/pip install gunicorn
+
+# create log dirs
+RUN mkdir -p /var/log/op/plugins && chown -R seleg:seleg /var/log/op
+VOLUME /var/log/op
 
 CMD ["start-stop-daemon", "--start", "-c", "seleg:seleg", "--exec", \
      "/op/env/bin/gunicorn", "--pidfile", "/var/run/se-leg-op.pid", \

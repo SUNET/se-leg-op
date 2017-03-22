@@ -178,6 +178,7 @@ SUCCESSFUL_VETTING_RESULT = {
             'Address1': 'ADDRESS'
         }
     },
+    'status': 'Successful',
     'data_match_score': 1000
 }
 
@@ -185,7 +186,7 @@ SUCCESSFUL_VETTING_RESULT = {
 @pytest.yield_fixture
 def config_envvar(mongodb_instance, redis_instance):
     config_values = {
-        'basepath': path.dirname(pkg_resources.resource_filename(__name__, '../service/app_config.py')),
+        'basepath': path.dirname(pkg_resources.resource_filename(__name__, '../../service/app_config.py')),
         'db_uri': mongodb_instance.get_uri(),
         'redis_uri': redis_instance.get_uri()
     }
@@ -211,6 +212,8 @@ MOBILE_VERIFY_WSDL = 'https://localhost/wsdl'
 MOBILE_VERIFY_USERNAME = 'soap_user'
 MOBILE_VERIFY_PASSWORD = 'secret'
 MOBILE_VERIFY_TENANT_REF = 'tenant_ref'
+
+NSTIC_VETTING_PROCESS_AUDIT_LOG_FILE = '/dev/null'
 
 DB_URI = '{db_uri}'
 REDIS_URI = '{redis_uri}'
@@ -280,6 +283,7 @@ class TestVettingResultEndpoint(object):
         responses.add(responses.GET, TEST_REDIRECT_URI, status=200)
         nonce = authn_request_args['nonce']
         self.app.authn_requests[nonce] = authn_request_args
+        state = self.app.authn_requests[nonce]['state']
         self.app.users[TEST_USER_ID] = {}
 
         token = 'token'
@@ -287,13 +291,15 @@ class TestVettingResultEndpoint(object):
         resp = self.app.test_client().post(VETTING_RESULT_ENDPOINT, data={'qrcode': qrdata, 'data': vetting_data})
 
         assert resp.status_code == 200
-        # verify the original authentication request is not removed
-        assert nonce in self.app.authn_requests
+        # verify the original authentication request is removed
+        assert nonce not in self.app.authn_requests
+        # check yubico state
+        assert state in self.app.yubico_states
         # Force processing if message queue
         self.force_send_all_queued_messages()
         # verify the posted data ends up in the userinfo document
         # Just check keys as the datetimes are different due to mongodb
-        assert self.app.users[TEST_USER_ID]['vetting_results'][0]['data'].keys() == SUCCESSFUL_VETTING_RESULT.keys()
+        assert self.app.users[TEST_USER_ID]['vetting_result']['data'].keys() == SUCCESSFUL_VETTING_RESULT.keys()
 
     # XXX: Remove after development
     @responses.activate
