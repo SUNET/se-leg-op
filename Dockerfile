@@ -9,7 +9,7 @@ WORKDIR /
 EXPOSE 5000
 VOLUME /op/etc
 
-RUN apt-get update && apt-get -yu dist-upgrade
+RUN apt-get update && apt-get -y dist-upgrade
 # for troubleshooting in the container
 RUN apt-get -y install \
     vim \
