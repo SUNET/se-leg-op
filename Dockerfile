@@ -30,14 +30,14 @@ RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 RUN adduser --system --group seleg
 
 # Add Dockerfile to the container as documentation
-ADD Dockerfile /Dockerfile
+COPY Dockerfile /Dockerfile
 
 # revision.txt is dynamically updated by the CI for every build,
 # to ensure the statements below this point are executed every time
-ADD revision.txt /revision.txt
+COPY revision.txt /revision.txt
 
 RUN mkdir -p /op && virtualenv -p python3 /op/env
-ADD . /op/src
+COPY . /op/src
 RUN cd /op/src && \
     /op/env/bin/pip install -U pip && \
     /op/env/bin/pip install -r requirements.txt && \
