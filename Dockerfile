@@ -7,7 +7,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 WORKDIR /
 EXPOSE 5000
-VOLUME ["/op/etc"]
+VOLUME /op/etc
 
 RUN apt-get update && apt-get -yu dist-upgrade
 # for troubleshooting in the container
@@ -42,6 +42,10 @@ RUN cd /op/src && \
     /op/env/bin/pip install -U pip && \
     /op/env/bin/pip install -r requirements.txt && \
     /op/env/bin/pip install gunicorn
+
+# create log dirs
+RUN mkdir -p /var/log/op/plugins && chown -R seleg:seleg /var/log/op
+VOLUME /var/log/op
 
 CMD ["start-stop-daemon", "--start", "-c", "seleg:seleg", "--exec", \
      "/op/env/bin/gunicorn", "--pidfile", "/var/run/se-leg-op.pid", \

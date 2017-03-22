@@ -61,7 +61,7 @@ def vetting_result():
     }
 
     # Add soap license check to queue
-    current_app.mobile_verify_service_queue.enqueue(verify_license, user_id, parsed_data['front_image_data'],
+    current_app.mobile_verify_service_queue.enqueue(verify_license, auth_req.to_dict(), parsed_data['front_image_data'],
                                                     parsed_data['barcode_data'], parsed_data['mibi_data'])
 
     return make_response('OK', 200)
