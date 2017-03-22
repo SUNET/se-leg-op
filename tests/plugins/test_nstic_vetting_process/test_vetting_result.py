@@ -178,6 +178,7 @@ SUCCESSFUL_VETTING_RESULT = {
             'Address1': 'ADDRESS'
         }
     },
+    'status': 'Successful',
     'data_match_score': 1000
 }
 
@@ -211,6 +212,8 @@ MOBILE_VERIFY_WSDL = 'https://localhost/wsdl'
 MOBILE_VERIFY_USERNAME = 'soap_user'
 MOBILE_VERIFY_PASSWORD = 'secret'
 MOBILE_VERIFY_TENANT_REF = 'tenant_ref'
+
+NSTIC_VETTING_PROCESS_AUDIT_LOG_FILE = '/dev/null'
 
 DB_URI = '{db_uri}'
 REDIS_URI = '{redis_uri}'
