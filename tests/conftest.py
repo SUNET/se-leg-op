@@ -34,20 +34,17 @@ class MongoTemporaryInstance(object):
     def __init__(self):
         self._tmpdir = tempfile.mkdtemp()
         self._port = random.randint(40000, 50000)
-        self._process = subprocess.Popen(['mongod', '--bind_ip', 'localhost',
-                                          '--port', str(self._port),
-                                          '--dbpath', self._tmpdir,
-                                          '--nojournal', '--nohttpinterface',
-                                          '--noauth', '--smallfiles',
-                                          '--syncdelay', '0',
-                                          '--nssize', '1', ],
-                                         stdout=open('/tmp/mongo-temp.log', 'wb'),
+        self._process = subprocess.Popen(['docker', 'run', '--rm',
+                                          '-p', '{!s}:27017'.format(self._port),
+                                          '-v', '{!s}:/data'.format(self._tmpdir),
+                                          'docker.sunet.se/eduid/mongodb:latest',
+                                          ],
+                                         stdout=open('/tmp/mongodb-temp.log', 'wb'),
                                          stderr=subprocess.STDOUT)
-
         # XXX: wait for the instance to be ready
         #      Mongo is ready in a glance, we just wait to be able to open a
         #      Connection.
-        for i in range(10):
+        for i in range(100):
             time.sleep(0.2)
             try:
                 self._conn = pymongo.MongoClient('localhost', self._port)
@@ -85,8 +82,10 @@ class MongoTemporaryInstance(object):
 
 class RedisTemporaryInstance(object):
     """Singleton to manage a temporary Redis instance
+
     Use this for testing purpose only. The instance is automatically destroyed
     at the end of the program.
+
     """
     _instance = None
 
@@ -98,15 +97,16 @@ class RedisTemporaryInstance(object):
         return cls._instance
 
     def __init__(self):
-        self._port = random.randint(40000, 50000)
-        self._process = subprocess.Popen(['redis-server',
-                                          '--port', str(self._port),
-                                          '--daemonize', 'no',
-                                          '--bind', '0.0.0.0',
-                                          '--databases', '1', ],
+        self._tmpdir = tempfile.mkdtemp()
+        self._port = random.randint(40000, 65535)
+        self._process = subprocess.Popen(['docker', 'run', '--rm',
+                                          '-p', '{!s}:6379'.format(self._port),
+                                          '-v', '{!s}:/data'.format(self._tmpdir),
+                                          '-e', 'extra_args=--daemonize no --bind 0.0.0.0',
+                                          'docker.sunet.se/eduid/redis:latest',
+                                          ],
                                          stdout=open('/tmp/redis-temp.log', 'wb'),
                                          stderr=subprocess.STDOUT)
-
         for i in range(10):
             time.sleep(0.2)
             try:
@@ -133,6 +133,7 @@ class RedisTemporaryInstance(object):
             self._process.terminate()
             self._process.wait()
             self._process = None
+            shutil.rmtree(self._tmpdir, ignore_errors=True)
 
     def get_uri(self):
         """
@@ -142,16 +143,16 @@ class RedisTemporaryInstance(object):
         return 'redis://localhost:{}/0'.format(self.port)
 
 
-@pytest.yield_fixture
+@pytest.yield_fixture(scope="session")
 def mongodb_instance():
-    tmp_db = MongoTemporaryInstance()
+    tmp_db = MongoTemporaryInstance.get_instance()
     yield tmp_db
     tmp_db.shutdown()
 
 
-@pytest.yield_fixture
+@pytest.yield_fixture(scope="session")
 def redis_instance():
-    tmp_redis = RedisTemporaryInstance()
+    tmp_redis = RedisTemporaryInstance.get_instance()
     yield tmp_redis
     tmp_redis.shutdown()
 

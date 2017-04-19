@@ -1,6 +1,9 @@
+sudo: required
+dist: trusty
 language: python
 
-sudo: false
+services:
+  - docker
 
 matrix:
   include:
@@ -16,8 +19,9 @@ script:
   - tox
 
 before_install:
+  - docker pull docker.sunet.se/eduid/redis:latest
+  - docker pull docker.sunet.se/eduid/mongodb:latest
   - pip install pytest-cov codecov -rrequirements.txt -rtests/requirements.txt .
-  - sleep 15 # wait for mongo
 
 after_success:
   - py.test tests/ --cov=./
