@@ -97,6 +97,8 @@ class TestYubicoApi(object):
         db_uri = request.instance.app.config['DB_URI']
         userinfodb = OpStorageWrapper(db_uri, 'userinfo')
         yubico_states = OpStorageWrapper(db_uri, 'yubico_states')
+        # Drop previous states
+        yubico_states._coll.drop()
         for state in states:
             yubico_states[state['state']] = state
             userinfodb[state['user_id']] = userinfo
