@@ -3,6 +3,7 @@
 import logging
 import time
 from flask.config import Config
+from requests.exceptions import ConnectionError
 
 from ...service.app import SE_LEG_PROVIDER_SETTINGS_ENVVAR
 from ...storage import OpStorageWrapper
@@ -33,7 +34,12 @@ logging.config.dictConfig(audit_log_config)
 audit_logger = logging.getLogger('nstic_vetting_process_audit')
 
 # Init service and db
-license_service = LicenseService(wsdl, username, password, tenant_reference_number)
+try:
+    license_service = LicenseService(wsdl, username, password, tenant_reference_number)
+except ConnectionError as e:
+    logger.error('Could not fetch wsdl.')
+    logger.error(e)
+    license_service = None
 users = OpStorageWrapper(config['DB_URI'], 'userinfo')
 
 
