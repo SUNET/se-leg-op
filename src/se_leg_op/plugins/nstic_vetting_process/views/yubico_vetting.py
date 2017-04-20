@@ -53,12 +53,19 @@ def vetting_result():
         return make_response('Missing vetting data: {}'.format(e), 400)
 
     # Save information needed for the next vetting step that uses the api
-    current_app.yubico_states[auth_req['state']] = {
-        'created': time(),
-        'state': auth_req['state'],
-        'client_id': auth_req['client_id'],
-        'user_id': user_id
-    }
+    try:
+        yubico_state = current_app.yubico_states[auth_req['state']]
+    except KeyError:
+        yubico_state = {
+            'created': time(),
+            'state': auth_req['state'],
+            'client_id': auth_req['client_id'],
+            'user_id': user_id
+        }
+    else:
+        # Yubico state already created via the api
+        yubico_state.update({'client_id': auth_req['client_id'], 'user_id': user_id})
+    current_app.yubico_states[auth_req['state']] = yubico_state
 
     # Add soap license check to queue
     current_app.mobile_verify_service_queue.enqueue(verify_license, auth_req.to_dict(), parsed_data['front_image_data'],
