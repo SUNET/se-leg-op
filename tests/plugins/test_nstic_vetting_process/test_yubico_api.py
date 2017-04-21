@@ -91,6 +91,8 @@ class TestYubicoApi(object):
             'vetting_policy': 'POST_AUTH'
         }
         self.app.provider.clients = client_db
+        self.app.config['YUBICO_API_CLIENTS'] = [TEST_CLIENT_ID]
+        self.app.config['YUBICO_API_ADMINS'] = {'admin': {'secret': 'admin'}}
 
     @pytest.fixture
     def create_states_in_db(self, request, states, userinfo):
@@ -113,6 +115,7 @@ class TestYubicoApi(object):
         {'user': 'test', 'password': 'test'},
         {'user': TEST_CLIENT_ID, 'password': 'wrong_password'},
         {'user': 'wrong_user', 'password': TEST_CLIENT_SECRET},
+        {'user': TEST_CLIENT_ID, 'password': False},
     ])
     def test_get_states_endpoint_unauthorized(self, user_and_password):
         # No auth header
@@ -133,6 +136,12 @@ class TestYubicoApi(object):
         assert 'userinfo' in state
         assert 'vetting_result' in state['userinfo']
 
+    def test_get_states_endpoint_admin(self):
+        resp = self.app.test_client().get(API_ENDPOINT, headers=basic_auth_header('admin', 'admin'))
+        assert resp.status_code == 200
+        json_resp = self.get_json(resp)
+        assert len(json_resp['states']) == 6
+
     def test_update_states_endpoint(self, basic_auth_header):
         data = {'states': []}
         for state in states():
@@ -147,6 +156,27 @@ class TestYubicoApi(object):
 
         # Check if update was saved correctly
         resp = self.app.test_client().get(API_ENDPOINT, headers=basic_auth_header)
+        assert resp.status_code == 200
+        json_resp = self.get_json(resp)
+        for state in json_resp['states']:
+            assert 'test_update' in state
+            assert 'created' in state
+            assert 'state' in state
+            assert 'userinfo' in state
+            assert 'vetting_result' in state['userinfo']
+
+    def test_update_states_endpoint_admin(self):
+        data = {'states': []}
+        for state in states():
+            state['userinfo'] = userinfo()
+            state['test_update'] = True
+            data['states'].append(state)
+        resp = self.app.test_client().post(API_ENDPOINT, headers=basic_auth_header('admin', 'admin'),
+                                           content_type='application/json', data=json.dumps(data))
+        assert resp.status_code == 202
+
+        # Check if update was saved correctly
+        resp = self.app.test_client().get(API_ENDPOINT, headers=basic_auth_header('admin', 'admin'))
         assert resp.status_code == 200
         json_resp = self.get_json(resp)
         for state in json_resp['states']:
@@ -219,6 +249,17 @@ class TestYubicoApi(object):
         assert 'userinfo' in json_resp
         assert 'vetting_result' in json_resp['userinfo']
 
+    def test_get_state_endpoint_admin(self):
+        state_id = states()[0]['state']
+        endpoint = API_ENDPOINT + '/{}'.format(state_id)
+        resp = self.app.test_client().get(endpoint, headers=basic_auth_header('admin', 'admin'))
+        assert resp.status_code == 200
+        json_resp = self.get_json(resp)
+        assert 'created' in json_resp
+        assert 'state' in json_resp
+        assert 'userinfo' in json_resp
+        assert 'vetting_result' in json_resp['userinfo']
+
     @pytest.mark.parametrize('state_id', [
         'unknown state',
         '9bdc12b7949e-5e5c-4bc5-a377-95ed786b'
@@ -230,6 +271,38 @@ class TestYubicoApi(object):
         json_resp = self.get_json(resp)
         assert json_resp['status'] == 'Not Found'
         assert json_resp['errors'] == [state_id]
+
+    def test_create_state_endpoint(self, basic_auth_header):
+        data = states()[0]
+        data['state'] = 'new state id'
+        data['test_update'] = True
+        endpoint = API_ENDPOINT + '/{}'.format(data['state'])
+        resp = self.app.test_client().post(endpoint, headers=basic_auth_header, content_type='application/json',
+                                           data=json.dumps(data))
+        assert resp.status_code == 201
+
+        db_state = self.app.yubico_states['new state id']
+        assert 'test_update' in db_state
+        assert 'created' in db_state
+        assert db_state['state'] == 'new state id'
+
+    def test_create_state_endpoint_admin(self):
+        data = states()[0]
+        data['state'] = 'new state id'
+        data['test_update'] = True
+        endpoint = API_ENDPOINT + '/{}'.format(data['state'])
+        resp = self.app.test_client().post(endpoint, headers=basic_auth_header('admin', 'admin'),
+                                           content_type='application/json', data=json.dumps(data))
+        assert resp.status_code == 201
+
+        resp = self.app.test_client().get(endpoint, headers=basic_auth_header('admin', 'admin'))
+        assert resp.status_code == 200
+        json_resp = self.get_json(resp)
+        assert 'test_update' in json_resp
+        assert 'created' in json_resp
+        assert 'state' in json_resp
+        assert 'userinfo' in json_resp
+        assert json_resp['userinfo'] is None
 
     def test_update_state_endpoint(self, basic_auth_header):
         data = states()[0]
@@ -247,8 +320,23 @@ class TestYubicoApi(object):
         assert 'userinfo' in json_resp
         assert 'vetting_result' in json_resp['userinfo']
 
+    def test_update_state_endpoint_admin(self):
+        data = states()[0]
+        data['test_update'] = True
+        endpoint = API_ENDPOINT + '/{}'.format(data['state'])
+        resp = self.app.test_client().post(endpoint, headers=basic_auth_header('admin', 'admin'),
+                                           content_type='application/json', data=json.dumps(data))
+        assert resp.status_code == 202
+        resp = self.app.test_client().get(endpoint, headers=basic_auth_header('admin', 'admin'))
+        assert resp.status_code == 200
+        json_resp = self.get_json(resp)
+        assert 'test_update' in json_resp
+        assert 'created' in json_resp
+        assert 'state' in json_resp
+        assert 'userinfo' in json_resp
+        assert 'vetting_result' in json_resp['userinfo']
+
     @pytest.mark.parametrize('state_id', [
-        'unknown state',
         '9bdc12b7949e-5e5c-4bc5-a377-95ed786b'
     ])
     def test_update_state_endpoint_unauthorized_state(self, basic_auth_header, state_id):
@@ -269,6 +357,21 @@ class TestYubicoApi(object):
         assert resp.status_code == 200
         # Check if it the state was removed
         resp = self.app.test_client().delete(endpoint, headers=basic_auth_header)
+        assert resp.status_code == 404
+        json_resp = self.get_json(resp)
+        assert json_resp['status'] == 'Not Found'
+        assert json_resp['errors'] == [state['state']]
+        # Check if the associated userinfo was removed
+        with pytest.raises(KeyError):
+            userinfo_doc = self.app.users[state['user_id']]
+
+    def test_delete_state_endpoint_admin(self):
+        state = states()[0]
+        endpoint = API_ENDPOINT + '/{}'.format(state['state'])
+        resp = self.app.test_client().delete(endpoint, headers=basic_auth_header('admin', 'admin'))
+        assert resp.status_code == 200
+        # Check if it the state was removed
+        resp = self.app.test_client().delete(endpoint, headers=basic_auth_header('admin', 'admin'))
         assert resp.status_code == 404
         json_resp = self.get_json(resp)
         assert json_resp['status'] == 'Not Found'

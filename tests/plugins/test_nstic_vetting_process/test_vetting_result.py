@@ -301,6 +301,36 @@ class TestVettingResultEndpoint(object):
         # Just check keys as the datetimes are different due to mongodb
         assert self.app.users[TEST_USER_ID]['vetting_result']['data'].keys() == SUCCESSFUL_VETTING_RESULT.keys()
 
+    @responses.activate
+    def test_vetting_endpoint_existing_yubico_state(self, authn_request_args, vetting_data):
+        responses.add(responses.GET, TEST_REDIRECT_URI, status=200)
+        nonce = authn_request_args['nonce']
+        self.app.authn_requests[nonce] = authn_request_args
+        state = self.app.authn_requests[nonce]['state']
+        self.app.users[TEST_USER_ID] = {}
+
+        # Client updates yubico state before vetting result arrives
+        self.app.yubico_states[state] = {'state': state, 'created': '1492705316.568317', 'some_data': 'data'}
+
+        token = 'token'
+        qrdata = '1' + json.dumps({'nonce': nonce, 'token': token})
+        resp = self.app.test_client().post(VETTING_RESULT_ENDPOINT, data={'qrcode': qrdata, 'data': vetting_data})
+
+        assert resp.status_code == 200
+        # verify the original authentication request is removed
+        assert nonce not in self.app.authn_requests
+        # check yubico state
+        assert state in self.app.yubico_states
+        db_state = self.app.yubico_states[state]
+        assert db_state['state'] == state
+        assert db_state['created'] == '1492705316.568317'
+        assert db_state['some_data'] == 'data'
+        # Force processing if message queue
+        self.force_send_all_queued_messages()
+        # verify the posted data ends up in the userinfo document
+        # Just check keys as the datetimes are different due to mongodb
+        assert self.app.users[TEST_USER_ID]['vetting_result']['data'].keys() == SUCCESSFUL_VETTING_RESULT.keys()
+
     # XXX: Remove after development
     @responses.activate
     def test_vetting_endpoint_development_nonce(self, vetting_data):
