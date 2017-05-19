@@ -55,7 +55,7 @@ def authentication_endpoint():
 
 @oidc_provider_views.route('/.well-known/openid-configuration')
 def provider_configuration():
-    return jsonify(current_app.provider.provider_configuration)
+    return jsonify(current_app.provider.provider_configuration.to_dict())
 
 
 @oidc_provider_views.route('/jwks')
