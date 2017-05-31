@@ -43,11 +43,14 @@ def vetting_result():
     user_id = auth_req['user_id']
 
     try:
+        current_app.logger.debug('Vetting data received: {}'.format(data))
         # Check vetting data received
         parsed_data = parse_vetting_data(data)
-    except ValueError:
-        current_app.logger.error('Received malformed json \'{}\''.format(data))
-        return make_response('Malformed json data', 400)
+        current_app.logger.debug('Vetting data parsed: {!r}'.format(parsed_data))
+    except ValueError as e:
+        current_app.logger.error('Received malformed vetting data \'{}\''.format(data))
+        current_app.logger.error(e)
+        return make_response('Malformed vetting data', 400)
     except KeyError as e:
         current_app.logger.error('Missing vetting data: \'{}\''.format(e))
         return make_response('Missing vetting data: {}'.format(e), 400)
