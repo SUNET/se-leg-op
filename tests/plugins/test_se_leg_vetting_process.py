@@ -51,8 +51,8 @@ class TestVettingResultEndpoint(object):
 
         token = 'token'
         qrdata = '1' + json.dumps({'nonce': nonce, 'token': token})
-        resp = self.app.test_client().post('/vetting-result', data={'qrcode': qrdata,
-                                                                    'identity': TEST_USER_ID})
+        data = {'qrcode': qrdata, 'identity': TEST_USER_ID}
+        resp = self.app.test_client().post('/vetting-result', data=json.dumps(data), content_type='application/json')
 
         assert resp.status_code == 200
         # verify the original authentication request has been handled
@@ -75,7 +75,8 @@ class TestVettingResultEndpoint(object):
         {'qrcode': 'nonce token'},  # missing 'identity'
     ])
     def test_vetting_endpoint_with_missing_data(self, parameters):
-        resp = self.app.test_client().post('/vetting-result', data=parameters)
+        resp = self.app.test_client().post('/vetting-result', data=json.dumps(parameters),
+                                           content_type='application/json')
         assert resp.status_code == 400
 
     @pytest.mark.parametrize('qrdata', [
@@ -85,12 +86,12 @@ class TestVettingResultEndpoint(object):
         '1{"nonce": "nonce"}',  # missing 'token'
         '2{"token": "token", "nonce": "nonce"}'  # invalid qr version
     ])
-    def test_vetting_endpoint_with_invalid_qr_data(self, authn_request_args, qrdata):
-        resp = self.app.test_client().post('/vetting-result', data={'qrcode': qrdata,
-                                                                    'identity': TEST_USER_ID})
+    def test_vetting_endpoint_with_invalid_qr_data(self, qrdata):
+        data = {'qrcode': qrdata, 'identity': TEST_USER_ID}
+        resp = self.app.test_client().post('/vetting-result', data=json.dumps(data), content_type='application/json')
         assert resp.status_code == 400
 
     def test_unexpected_nonce(self):
-        resp = self.app.test_client().post('/vetting-result', data={'qrcode': 'unexpected token',
-                                                                    'identity': TEST_USER_ID})
+        data = {'qrcode': 'unexpected token', 'identity': TEST_USER_ID}
+        resp = self.app.test_client().post('/vetting-result', data=json.dumps(data), content_type='application/json')
         assert resp.status_code == 400
