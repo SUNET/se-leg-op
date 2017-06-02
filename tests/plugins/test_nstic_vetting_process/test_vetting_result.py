@@ -244,11 +244,6 @@ def authn_request_args():
     }
 
 
-@pytest.fixture
-def vetting_data():
-    return parse.quote(json.dumps(VETTING_DATA))
-
-
 @pytest.yield_fixture
 def mock_soap_client():
     patcher = mock.patch('se_leg_op.plugins.nstic_vetting_process.license_service.MitekMobileVerifyService',
@@ -279,7 +274,7 @@ class TestVettingResultEndpoint(object):
         worker.work(burst=True)
 
     @responses.activate
-    def test_vetting_endpoint(self, authn_request_args, vetting_data):
+    def test_vetting_endpoint(self, authn_request_args):
         responses.add(responses.GET, TEST_REDIRECT_URI, status=200)
         nonce = authn_request_args['nonce']
         self.app.authn_requests[nonce] = authn_request_args
@@ -288,7 +283,10 @@ class TestVettingResultEndpoint(object):
 
         token = 'token'
         qrdata = '1' + json.dumps({'nonce': nonce, 'token': token})
-        resp = self.app.test_client().post(VETTING_RESULT_ENDPOINT, data={'qrcode': qrdata, 'data': vetting_data})
+        data = {'qrcode': qrdata}
+        data.update(VETTING_DATA)
+        resp = self.app.test_client().post(VETTING_RESULT_ENDPOINT, data=json.dumps(data),
+                                           content_type='application/json')
 
         assert resp.status_code == 200
         # verify the original authentication request is removed
@@ -302,7 +300,7 @@ class TestVettingResultEndpoint(object):
         assert self.app.users[TEST_USER_ID]['vetting_result']['data'].keys() == SUCCESSFUL_VETTING_RESULT.keys()
 
     @responses.activate
-    def test_vetting_endpoint_existing_yubico_state(self, authn_request_args, vetting_data):
+    def test_vetting_endpoint_existing_yubico_state(self, authn_request_args):
         responses.add(responses.GET, TEST_REDIRECT_URI, status=200)
         nonce = authn_request_args['nonce']
         self.app.authn_requests[nonce] = authn_request_args
@@ -314,7 +312,10 @@ class TestVettingResultEndpoint(object):
 
         token = 'token'
         qrdata = '1' + json.dumps({'nonce': nonce, 'token': token})
-        resp = self.app.test_client().post(VETTING_RESULT_ENDPOINT, data={'qrcode': qrdata, 'data': vetting_data})
+        data = {'qrcode': qrdata}
+        data.update(VETTING_DATA)
+        resp = self.app.test_client().post(VETTING_RESULT_ENDPOINT, data=json.dumps(data),
+                                           content_type='application/json')
 
         assert resp.status_code == 200
         # verify the original authentication request is removed
@@ -333,23 +334,25 @@ class TestVettingResultEndpoint(object):
 
     # XXX: Remove after development
     @responses.activate
-    def test_vetting_endpoint_development_nonce(self, vetting_data):
+    def test_vetting_endpoint_development_nonce(self):
         self.app.config['TEST_NONCE'] = 'test'
         responses.add(responses.GET, TEST_REDIRECT_URI, status=200)
 
         token = 'token'
         qrdata = '1' + json.dumps({'nonce': 'test', 'token': token})
-        resp = self.app.test_client().post(VETTING_RESULT_ENDPOINT, data={'qrcode': qrdata, 'data': vetting_data})
+        data = {'qrcode': qrdata}
+        data.update(VETTING_DATA)
+        resp = self.app.test_client().post(VETTING_RESULT_ENDPOINT, data=json.dumps(data),
+                                           content_type='application/json')
 
         assert resp.status_code == 200
     # XXX: End remove after development
 
     @pytest.mark.parametrize('malformed_vetting_data', [
-        '',  # no data
-        '{"test": "{"malformed": "data"}"',  # invalid json
-        '{"encodedData":"", "barcode":""}',  # missing 'mibi'
-        '{"mibi": "", "barcode":""}',  # missing 'encodedData'
-        '{"mibi": "", "encodedData":""}',  # missing 'barcode'
+        {},                                     # no data
+        {"encodedData": "", "barcode": ""},     # missing 'mibi'
+        {"mibi": "", "barcode": ""},            # missing 'encodedData'
+        {"mibi": "", "encodedData": ""},        # missing 'barcode'
     ])
     @responses.activate
     def test_vetting_endpoint_malformed_json(self, authn_request_args, malformed_vetting_data):
@@ -359,17 +362,20 @@ class TestVettingResultEndpoint(object):
 
         token = 'token'
         qrdata = '1' + json.dumps({'nonce': 'test', 'token': token})
-        resp = self.app.test_client().post(VETTING_RESULT_ENDPOINT, data={'qrcode': qrdata,
-                                                                          'data': malformed_vetting_data})
+        data = {'qrcode': qrdata}
+        data.update(malformed_vetting_data)
+        resp = self.app.test_client().post(VETTING_RESULT_ENDPOINT, data=json.dumps(data),
+                                           content_type='application/json')
 
         assert resp.status_code == 400
 
     @pytest.mark.parametrize('parameters', [
-        {'data': json.dumps(VETTING_DATA)},  # missing 'qrcode'
-        {'qrcode': 'nonce token'},  # missing 'identity'
+        VETTING_DATA,               # missing 'qrcode'
+        {'qrcode': 'nonce token'},  # missing other data
     ])
     def test_vetting_endpoint_with_missing_data(self, parameters):
-        resp = self.app.test_client().post(VETTING_RESULT_ENDPOINT, data=parameters)
+        resp = self.app.test_client().post(VETTING_RESULT_ENDPOINT, data=json.dumps(parameters),
+                                           content_type='application/json')
         assert resp.status_code == 400
 
     @pytest.mark.parametrize('qrdata', [
@@ -379,11 +385,16 @@ class TestVettingResultEndpoint(object):
         '1{"nonce": "nonce"}',  # missing 'token'
         '2{"token": "token", "nonce": "nonce"}'  # invalid qr version
     ])
-    def test_vetting_endpoint_with_invalid_qr_data(self, qrdata, vetting_data):
-        resp = self.app.test_client().post(VETTING_RESULT_ENDPOINT, data={'qrcode': qrdata, 'data': vetting_data})
+    def test_vetting_endpoint_with_invalid_qr_data(self, qrdata):
+        data = {'qrcode': qrdata}
+        data.update(VETTING_DATA)
+        resp = self.app.test_client().post(VETTING_RESULT_ENDPOINT, data=json.dumps(data),
+                                           content_type='application/json')
         assert resp.status_code == 400
 
     def test_unexpected_nonce(self):
-        resp = self.app.test_client().post(VETTING_RESULT_ENDPOINT, data={'qrcode': 'unexpected token',
-                                                                          'data': vetting_data})
+        data = {'qrcode': 'unexpected token'}
+        data.update(VETTING_DATA)
+        resp = self.app.test_client().post(VETTING_RESULT_ENDPOINT, data=json.dumps(data),
+                                           content_type='application/json')
         assert resp.status_code == 400
