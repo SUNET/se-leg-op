@@ -76,7 +76,7 @@ def parse_vetting_data(data):
     :return: parsed data
     :rtype: dict
     """
-    parsed_data = {}
+    parsed_data = dict()
     # The soap service wants the mibi data in a json string
     parsed_data['mibi_data'] = json.dumps(data['mibi'])
     # The soap service wants to encode the image data so lets decode it here

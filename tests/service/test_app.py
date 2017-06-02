@@ -38,7 +38,8 @@ class TestApp(object):
             'qrcode': '1' + json.dumps({'nonce': TEST_NONCE, 'token': TEST_TOKEN}),
             'identity': TEST_USER_ID
         }
-        resp = self.app.test_client().post('/vetting-result', data=vetting_result)
+        resp = self.app.test_client().post('/vetting-result', data=json.dumps(vetting_result),
+                                           content_type='application/json')
         assert resp.status_code == 200
 
         # force all authentication responses to be sent

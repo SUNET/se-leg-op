@@ -19,9 +19,10 @@ yubico_vetting_process_views = Blueprint('yubico_vetting_process', __name__, url
 @yubico_vetting_process_views.route('/vetting-result', methods=['POST'])
 def vetting_result():
     data = flask.request.get_json()
+    qrcode = data.get('qrcode')
 
     try:
-        qrdata = parse_qrdata(data['qrcode'])
+        qrdata = parse_qrdata(qrcode)
     except InvalidQrDataError as e:
         return make_response(str(e), 400)
 
