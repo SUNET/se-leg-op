@@ -71,16 +71,15 @@ def init_mobile_verify_service_queue(config):
 
 def parse_vetting_data(data):
     """
-    :param data: JSON string
-    :type data: str
+    :param data: vetting data
+    :type data: dict
     :return: parsed data
     :rtype: dict
     """
     parsed_data = {}
-    vetting_data = json.loads(data)
     # The soap service wants the mibi data in a json string
-    parsed_data['mibi_data'] = json.dumps(vetting_data['mibi'])
+    parsed_data['mibi_data'] = json.dumps(data['mibi'])
     # The soap service wants to encode the image data so lets decode it here
-    parsed_data['front_image_data'] = base64.b64decode(vetting_data['encodedData'])
-    parsed_data['barcode_data'] = vetting_data['barcode']
+    parsed_data['front_image_data'] = base64.b64decode(data['encodedData'])
+    parsed_data['barcode_data'] = data['barcode']
     return parsed_data

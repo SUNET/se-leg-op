@@ -5,7 +5,6 @@ from flask.blueprints import Blueprint
 from flask.globals import current_app
 from flask.helpers import make_response
 from oic.oic.message import AuthorizationRequest
-from urllib import parse as urllib_parse
 from time import time
 
 from se_leg_op.service.vetting_process_tools import parse_qrdata, InvalidQrDataError
@@ -19,13 +18,10 @@ yubico_vetting_process_views = Blueprint('yubico_vetting_process', __name__, url
 
 @yubico_vetting_process_views.route('/vetting-result', methods=['POST'])
 def vetting_result():
-    data = flask.request.form['data']
-    # Unquote the data parameter again, it seems double encoded
-    data = urllib_parse.unquote(data)
-    qrcode = flask.request.form['qrcode']
+    data = flask.request.get_json()
 
     try:
-        qrdata = parse_qrdata(qrcode)
+        qrdata = parse_qrdata(data['qrcode'])
     except InvalidQrDataError as e:
         return make_response(str(e), 400)
 

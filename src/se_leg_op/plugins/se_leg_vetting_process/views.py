@@ -21,8 +21,9 @@ blueprints = [se_leg_vetting_process_views]
 
 @se_leg_vetting_process_views.route('/vetting-result', methods=['POST'])
 def vetting_result():
-    identity = flask.request.form['identity']
-    qrcode = flask.request.form['qrcode']
+    data = flask.request.get_json()
+    identity = data['identity']
+    qrcode = data['qrcode']
 
     try:
         qrdata = parse_qrdata(qrcode)
