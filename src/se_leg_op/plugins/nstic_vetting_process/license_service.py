@@ -77,8 +77,12 @@ def parse_vetting_data(data):
     :rtype: dict
     """
     parsed_data = dict()
-    # The soap service wants the mibi data in a json string
-    parsed_data['mibi_data'] = json.dumps(data['mibi'])
+    mibi_data = data.get('mibi', None)  # mibi is optional
+    if mibi_data:
+        # The soap service wants the mibi data in a json string
+        mibi_data = json.dumps(mibi_data)
+
+    parsed_data['mibi_data'] = mibi_data
     # The soap service wants to encode the image data so lets decode it here
     parsed_data['front_image_data'] = base64.b64decode(data['encodedData'])
     parsed_data['barcode_data'] = data['barcode']

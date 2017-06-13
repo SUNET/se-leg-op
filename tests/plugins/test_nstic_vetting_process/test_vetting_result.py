@@ -350,7 +350,6 @@ class TestVettingResultEndpoint(object):
 
     @pytest.mark.parametrize('malformed_vetting_data', [
         {},                                     # no data
-        {"encodedData": "", "barcode": ""},     # missing 'mibi'
         {"mibi": "", "barcode": ""},            # missing 'encodedData'
         {"mibi": "", "encodedData": ""},        # missing 'barcode'
     ])
@@ -361,7 +360,7 @@ class TestVettingResultEndpoint(object):
         responses.add(responses.GET, TEST_REDIRECT_URI, status=200)
 
         token = 'token'
-        qrdata = '1' + json.dumps({'nonce': 'test', 'token': token})
+        qrdata = '1' + json.dumps({'nonce': nonce, 'token': token})
         data = {'qrcode': qrdata}
         data.update(malformed_vetting_data)
         resp = self.app.test_client().post(VETTING_RESULT_ENDPOINT, data=json.dumps(data),
