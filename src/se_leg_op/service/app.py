@@ -15,6 +15,8 @@ from flask_registry import PackageRegistry, Registry
 
 from ..storage import OpStorageWrapper
 
+import logging
+
 SE_LEG_PROVIDER_SETTINGS_ENVVAR = 'SE_LEG_PROVIDER_SETTINGS'
 
 
@@ -84,12 +86,24 @@ def init_authn_response_queue(config):
     return rq.Queue('authn_responses', connection=connection)
 
 
+def init_logging(app):
+    out_handler = logging.StreamHandler()
+    formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    out_handler.setFormatter(formatter)
+    out_handler.setLevel(logging.DEBUG)
+    app.logger.addHandler(out_handler)
+    return app
+
+
 def oidc_provider_init_app(name=None, config=None):
     name = name or __name__
     app = Flask(name)
     app.config.from_envvar(SE_LEG_PROVIDER_SETTINGS_ENVVAR)
     if config:
         app.config.update(config)
+
+    # Init logging
+    app = init_logging(app)
 
     # Initialize registry for plugin handling
     r = Registry(app=app)
