@@ -4,6 +4,8 @@ import logging
 import time
 from flask.config import Config
 from requests.exceptions import ConnectionError
+from zeep.exceptions import Fault as ZeepFault
+import lxml
 
 from ...service.app import SE_LEG_PROVIDER_SETTINGS_ENVVAR
 from ...storage import OpStorageWrapper
@@ -12,7 +14,6 @@ from .config import NSTIC_VETTING_PROCESS_AUDIT_LOG_FILE, NSTIC_VETTING_PROCESS_
 
 __author__ = 'lundberg'
 
-logger = logging.getLogger(__name__)
 
 # Read conf
 config = Config('')
@@ -21,6 +22,14 @@ wsdl = config['MOBILE_VERIFY_WSDL']
 username = config['MOBILE_VERIFY_USERNAME']
 password = config['MOBILE_VERIFY_PASSWORD']
 tenant_reference_number = config['MOBILE_VERIFY_TENANT_REF']
+
+# Set up logging
+logger = logging.getLogger(__name__)
+out_handler = logging.StreamHandler()
+formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+out_handler.setFormatter(formatter)
+out_handler.setLevel(logging.DEBUG)
+logger.addHandler(out_handler)
 
 # Set up audit logging
 audit_log_file = config.get('NSTIC_VETTING_PROCESS_AUDIT_LOG_FILE', NSTIC_VETTING_PROCESS_AUDIT_LOG_FILE)
@@ -45,7 +54,24 @@ users = OpStorageWrapper(config['DB_URI'], 'userinfo')
 
 def verify_license(auth_req, front_image_data, barcode, mibi_data):
 
-    response = license_service.verify(front_image_data, barcode, mibi_data)
+    try:
+        response = license_service.verify(front_image_data, barcode, mibi_data)
+    except ZeepFault as e:
+        logger.error('Error in SOAP service client')
+        logger.error(e)
+        raise e
+    finally:
+        logger.debug('SENT:')
+        logger.debug(license_service.history.last_sent)
+        sent_element = license_service.history.last_sent['envelope']
+        pretty_sent_element = lxml.etree.tostring(sent_element, pretty_print=True)
+        logger.debug(pretty_sent_element.decode("utf-8"))
+
+        logger.debug('RECEIVED:')
+        logger.debug(license_service.history.last_received)
+        received_element = license_service.history.last_received['envelope']
+        pretty_received_element = lxml.etree.tostring(received_element, pretty_print=True)
+        logger.debug(pretty_received_element.decode("utf-8"))
 
     logger.debug('Parsed response:')
     logger.debug(response)

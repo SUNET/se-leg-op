@@ -10,6 +10,7 @@ from se_leg_op.storage import OpStorageWrapper
 
 from mitek_mobile_verify.services import MitekMobileVerifyService
 from mitek_mobile_verify.plugins import DoctorPlugin
+from zeep.plugins import HistoryPlugin
 from mitek_mobile_verify.models.requests import PhotoVerifyRequest
 from mitek_mobile_verify.models.headers import DeviceMetaData, WebRequestMetadataHeader, MibiDataHeader
 
@@ -21,8 +22,11 @@ logger = logging.getLogger(__name__)
 class LicenseService(object):
 
     def __init__(self, wsdl, username, password, tenant_reference_number):
+        # HistoryPlugin for debug logging requests and response
+        self.history = HistoryPlugin()
         # DoctorPlugin is needed to deserialize the response correctly
-        self.soap_service = MitekMobileVerifyService(wsdl, username, password, plugins=[DoctorPlugin()])
+        plugins = [DoctorPlugin(), self.history]
+        self.soap_service = MitekMobileVerifyService(wsdl, username, password, plugins=plugins)
         self.tenant_reference_number = tenant_reference_number
         logger.info('Loaded LicenseService')
 
