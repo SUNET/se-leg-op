@@ -7,8 +7,8 @@ import pkg_resources
 from os import path
 from tempfile import NamedTemporaryFile
 from unittest import mock
-from urllib import parse
 from rq import SimpleWorker
+from lxml import etree
 
 from se_leg_op.storage import OpStorageWrapper
 from tests.conftest import inject_app as main_inject_app
@@ -246,10 +246,15 @@ def authn_request_args():
 
 @pytest.yield_fixture
 def mock_soap_client():
-    patcher = mock.patch('se_leg_op.plugins.nstic_vetting_process.license_service.MitekMobileVerifyService',
+    patcher = mock.patch('se_leg_op.plugins.nstic_vetting_process.license_service.LicenseService',
                          new=mock.Mock)
     soap_client = patcher.start()
+    soap_client.soap_service = mock.Mock()
     soap_client.verify = mock.Mock(return_value=SUCCESSFUL_SOAP_RESPONSE)
+    soap_client.history = mock.Mock()
+    mock_element = etree.Element('test')
+    soap_client.history.last_sent = {'envelope': mock_element}
+    soap_client.history.last_received = {'envelope': mock_element}
     yield soap_client
     patcher.stop()
 
