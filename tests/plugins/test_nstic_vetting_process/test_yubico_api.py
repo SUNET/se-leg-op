@@ -392,4 +392,19 @@ class TestYubicoApi(object):
         assert json_resp['status'] == 'Not Found'
         assert json_resp['errors'] == [state_id]
 
-
+    def test_delete_state_endpoint_missing_user_id(self):
+        no_user_id_state = {
+            'created': THE_TIME,
+            'state': '95ed786b-5e5c-4bc5-a377-9bdc12b7949e',
+            'client_id': TEST_CLIENT_ID
+        }
+        self.app.yubico_states[no_user_id_state['state']] = no_user_id_state
+        endpoint = API_ENDPOINT + '/{}'.format(no_user_id_state['state'])
+        resp = self.app.test_client().delete(endpoint, headers=basic_auth_header('admin', 'admin'))
+        assert resp.status_code == 200
+        # Check if it the state was removed
+        resp = self.app.test_client().delete(endpoint, headers=basic_auth_header('admin', 'admin'))
+        assert resp.status_code == 404
+        json_resp = self.get_json(resp)
+        assert json_resp['status'] == 'Not Found'
+        assert json_resp['errors'] == [no_user_id_state['state']]

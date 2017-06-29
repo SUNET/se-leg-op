@@ -13,6 +13,7 @@ yubico_api_v1_views = Blueprint('yubico_api_v1_views', __name__, url_prefix='/yu
 def authorize(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
+        authorized = False
         if request.authorization:
             username = request.authorization['username']
             password = request.authorization['password']
@@ -28,10 +29,12 @@ def authorize(f):
                     secret = admin['secret']
                     kwargs['username'] = 'admin'
                 if secret and secret == password:
-                    return f(*args, **kwargs)
+                    authorized = True
                 current_app.logger.error('Authorization failure: Wrong password for {}'.format(username))
             except KeyError as e:
                 current_app.logger.error('Authorization failure: KeyError {}'.format(e))
+        if authorized:
+            return f(*args, **kwargs)
         abort(401)
     return decorated_function
 
@@ -213,6 +216,7 @@ def delete_state(username, state_id):
     except KeyError:
         current_app.logger.warning('Client {} tried to delete unknown state {}'.format(username, state_id))
         return create_json_response({'status': 'Not Found', 'errors': [state_id]}, 404)
-    del current_app.users[state['user_id']]
+    if state.get('user_id'):
+        del current_app.users[state['user_id']]
     del current_app.yubico_states[state_id]
     return create_json_response({'status': 'OK'})
