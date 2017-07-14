@@ -1,4 +1,4 @@
-FROM debian
+FROM debian:stable
 
 MAINTAINER se-leg developers <se-leg@lists.sunet.se>
 
