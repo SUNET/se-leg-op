@@ -1,6 +1,8 @@
 import time
 import json
+import uuid
 from base64 import urlsafe_b64decode
+import binascii
 from builtins import UnicodeDecodeError
 
 # JSONDecodeError is only available from Python > 3.4
@@ -41,14 +43,14 @@ blueprints = [verisec_vetting_process_views]
 
 @verisec_vetting_process_views.route('/vetting-result', methods=['POST'])
 def vetting_result():
-    if not current_app.config.get('FREJA_CALLBACK_X5C_CERT'):
-        current_app.logger.info('Configuration error: FREJA_CALLBACK_X5C_CERT is not set')
+    if not current_app.config.get('FREJA_CALLBACK_X5T_CERT'):
+        current_app.logger.info('Configuration error: FREJA_CALLBACK_X5T_CERT is not set')
         return make_response('Configuration error', 500)
 
-    _freja_callback_x5c_cert = current_app.config.get('FREJA_CALLBACK_X5C_CERT')
-    _freja_callback_x5c_pub_key = RSA.importKey(_freja_callback_x5c_cert)
+    _freja_callback_x5t_cert = current_app.config.get('FREJA_CALLBACK_X5T_CERT')
+    _freja_callback_x5t_pub_key = RSA.importKey(_freja_callback_x5t_cert)
     _freja_callback_rsa_pub_key = RSAKey()
-    _freja_callback_rsa_pub_key.load_key(_freja_callback_x5c_pub_key)
+    _freja_callback_rsa_pub_key.load_key(_freja_callback_x5t_pub_key)
 
     current_app.logger.debug('flask.request.headers: \'{!s}\''.format(flask.request.headers))
     current_app.logger.debug('flask.request.data: \'{!s}\''.format(flask.request.get_data()))
@@ -101,6 +103,9 @@ def vetting_result():
     except UnicodeDecodeError:
         current_app.logger.info('Couldn\'t urlsafe_b64decode iaResponseData because it contains invalid UTF-8')
         return make_response('Incorrect UTF-8 in iaResponseData', 400)
+    except binascii.Error:
+        current_app.logger.info('Couldn\'t urlsafe_b64decode iaResponseData because non-base64 digit found')
+        return make_response('Incorrect UTF-8 in iaResponseData', 400)
     except TypeError:
         current_app.logger.info('Couldn\'t urlsafe_b64decode iaResponseData')
         return make_response('Incorrect base64 encoded iaResponseData', 400)
@@ -142,16 +147,32 @@ def vetting_result():
             # This is by design since we want the message from this exception
             return make_response(str(e), 400)
 
+        if verified_opaque_deserialized['nonce'] == current_app.config.get('FREJA_TEST_NONCE', None):
+            current_app.logger.info('Received a valid callback-test')
+            return make_response('OK', 200)
+
         auth_req_data = current_app.authn_requests.pop(verified_opaque_deserialized['nonce'], None)
         if not auth_req_data:
             current_app.logger.info('Unknown nonce in verified JWS payload: \'{!s}\''.format(verified_opaque_deserialized['nonce']))
             return make_response('Unknown nonce in verified JWS payload', 400)
 
-        current_app.users[verified_payload_ssn] = {'vetting_time': time.time(), 'identity': verified_payload_ssn}
+        user_id = str(uuid.uuid4())
+
+        current_app.users[user_id] = {
+            'results': {
+                'freja_eid': {
+                    'vetting_time': time.time(),
+                    'country': verified_payload_country,
+                    'opaque': verified_payload_opaque,
+                    'ref': verified_payload_ref,
+                    'ssn': verified_payload_ssn,
+                }
+            }
+        }
 
         auth_req = AuthorizationRequest(**auth_req_data)
         authn_response = create_authentication_response(auth_req=auth_req,
-                                                        user_id=verified_payload_ssn,
+                                                        user_id=user_id,
                                                         extra_userinfo=extra_userinfo)
 
         response_url = authn_response.request(auth_req['redirect_uri'], should_fragment_encode(auth_req))
