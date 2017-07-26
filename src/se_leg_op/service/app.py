@@ -12,6 +12,7 @@ from pyop.userinfo import Userinfo
 from redis.client import StrictRedis
 from flask_registry import BlueprintAutoDiscoveryRegistry, ConfigurationRegistry, ExtensionRegistry
 from flask_registry import PackageRegistry, Registry
+import logging
 
 from ..storage import OpStorageWrapper
 

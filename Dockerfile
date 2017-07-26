@@ -1,4 +1,4 @@
-FROM debian
+FROM debian:stable
 
 MAINTAINER se-leg developers <se-leg@lists.sunet.se>
 
@@ -8,6 +8,8 @@ ENV DEBIAN_FRONTEND=noninteractive \
 WORKDIR /
 EXPOSE 5000
 VOLUME /op/etc
+
+RUN /usr/bin/sed -i s/deb.debian.org/ftp.se.debian.org/g /etc/apt/sources.list
 
 RUN apt-get update && apt-get -y dist-upgrade
 # for troubleshooting in the container

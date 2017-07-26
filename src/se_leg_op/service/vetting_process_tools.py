@@ -8,27 +8,27 @@ from oic.oic.message import AuthorizationRequest
 __author__ = 'lundberg'
 
 
-class InvalidQrDataError(Exception):
+class InvalidOpaqueDataError(Exception):
     pass
 
 
-def parse_qrdata(qrcode):
-    if not qrcode:
-        raise InvalidQrDataError('Empty QR code version')
+def parse_opaque_data(opaque_data):
+    if not opaque_data:
+        raise InvalidOpaqueDataError('No opaque data passed to the function')
 
-    qr_version = qrcode[0]
-    if qr_version != '1':
-        raise InvalidQrDataError('Invalid QR code version')
+    opaque_data_version = opaque_data[0]
+    if opaque_data_version != '1':
+        raise InvalidOpaqueDataError('Invalid opaque data version')
 
     try:
-        qrdata = json.loads(qrcode[1:])
+        opaque_data_deserialized = json.loads(opaque_data[1:])
     except ValueError as e:
-        raise InvalidQrDataError('Invalid QR code')
+        raise InvalidOpaqueDataError('Invalid formatted opaque data')
 
-    if not all(key in qrdata for key in ('nonce', 'token')):
-        raise InvalidQrDataError('Invalid QR code')
+    if not all(key in opaque_data_deserialized for key in ('nonce', 'token')):
+        raise InvalidOpaqueDataError('Invalid opaque data: nonce or token is missing')
 
-    return qrdata
+    return opaque_data_deserialized
 
 
 def create_authentication_response(auth_req, user_id=None, extra_userinfo=None):

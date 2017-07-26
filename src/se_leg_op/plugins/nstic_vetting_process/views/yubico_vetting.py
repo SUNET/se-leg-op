@@ -7,7 +7,7 @@ from flask.helpers import make_response
 from oic.oic.message import AuthorizationRequest
 from time import time
 
-from se_leg_op.service.vetting_process_tools import parse_qrdata, InvalidQrDataError
+from se_leg_op.service.vetting_process_tools import parse_opaque_data, InvalidOpaqueDataError
 from ..license_service import parse_vetting_data
 from ..license_service_worker import verify_license
 
@@ -22,8 +22,8 @@ def vetting_result():
     qrcode = data.get('qrcode')
 
     try:
-        qrdata = parse_qrdata(qrcode)
-    except InvalidQrDataError as e:
+        qrdata = parse_opaque_data(qrcode)
+    except InvalidOpaqueDataError as e:
         return make_response(str(e), 400)
 
     auth_req_data = current_app.authn_requests.pop(qrdata['nonce'])

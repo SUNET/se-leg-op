@@ -10,7 +10,7 @@ from pyop.util import should_fragment_encode
 
 from ...service.views.oidc_provider import extra_userinfo
 from ...service.response_sender import deliver_response_task
-from ...service.vetting_process_tools import parse_qrdata, InvalidQrDataError, create_authentication_response
+from ...service.vetting_process_tools import parse_opaque_data, InvalidOpaqueDataError, create_authentication_response
 
 
 se_leg_vetting_process_views = Blueprint('se_leg_vetting_process', __name__, url_prefix='')
@@ -29,8 +29,9 @@ def vetting_result():
         return make_response('Missing identity', 400)
 
     try:
-        qrdata = parse_qrdata(qrcode)
-    except InvalidQrDataError as e:
+        qrdata = parse_opaque_data(qrcode)
+    except InvalidOpaqueDataError as e:
+        # This is by design since we want the message from this exception
         return make_response(str(e), 400)
 
     auth_req_data = current_app.authn_requests.pop(qrdata['nonce'], None)
