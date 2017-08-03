@@ -246,6 +246,26 @@ class TestVettingResultEndpoint(object):
         assert resp.data == b'Unknown nonce in verified JWS payload'
         assert resp.status_code == 400
 
+    @pytest.mark.parametrize('parameters', [
+        {'iaResponseData': DEMO_RESPONSE_DATA_X5T},
+    ])
+    def test_vetting_endpoint_with_demo_jws_test_nonce(self, parameters):
+        self.app.config['FREJA_TEST_NONCE'] = 'cabac57b-e62c-49db-b102-45db25384b69'
+        resp = self.app.test_client().post(VETTING_RESULT_ENDPOINT, data=json.dumps(parameters),
+                                           content_type='application/jose')
+        assert resp.data == b'OK'
+        assert resp.status_code == 200
+
+    @pytest.mark.parametrize('parameters', [
+        {'iaResponseData': DEMO_RESPONSE_DATA_X5T},
+    ])
+    def test_vetting_endpoint_with_demo_jws_wrong_test_nonce(self, parameters):
+        self.app.config['FREJA_TEST_NONCE'] = 'dba4af58-ca8c-428b-a111-6e2526207b50'
+        resp = self.app.test_client().post(VETTING_RESULT_ENDPOINT, data=json.dumps(parameters),
+                                           content_type='application/jose')
+        assert resp.data == b'Unknown nonce in verified JWS payload'
+        assert resp.status_code == 400
+
     @patch('uuid.uuid4', MOCK_UUID)
     @responses.activate
     @pytest.mark.parametrize('parameters', [
