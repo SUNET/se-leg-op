@@ -153,11 +153,17 @@ class TestAuthenticationEndpoint(object):
         parsed = urlparse(responses.calls[0].request.url)
         assert dict(parse_qsl(parsed.fragment)) == {'error': 'invalid_request', 'error_message': 'test'}
 
+    @responses.activate
     def test_bad_request_with_invalid_redirect_uri(self, authn_request_args):
         authn_request_args['redirect_uri'] = 'https://invalid.com'
 
         resp = self.app.test_client().post('/authentication', data=authn_request_args)
-        assert resp.status_code == 400
+        assert resp.data == b'OK'
+        assert resp.status_code == 200
+
+        self.force_send_all_queued_messages()
+        parsed = urlparse(responses.calls[0].request.url)
+        assert dict(parse_qsl(parsed.query)) == {'error': 'invalid_request', 'error_message': 'Redirect uri is not registered'}
 
     @responses.activate
     def test_reject_authn_request_without_nonce(self, authn_request_args):
