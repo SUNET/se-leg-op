@@ -7,6 +7,7 @@ import subprocess
 import tempfile
 import time
 import pkg_resources
+import base64
 
 import pymongo
 import pytest
@@ -170,10 +171,28 @@ def inject_app(request, tmpdir, mongodb_instance, redis_instance, config_envvar)
         '_mongodb': mongodb_instance,
         'DB_URI': mongodb_instance.get_uri(),
         'REDIS_URI': redis_instance.get_uri(),
-        'PREFERRED_URL_SCHEME': 'https'
+        'PREFERRED_URL_SCHEME': 'https',
+        'SELEG_VETTING_APPS': {
+            'test_app': {
+                'secret': 'testing'
+            }
+        }
     }
     extra_config = getattr(request.module, "EXTRA_CONFIG", {})
     config.update(extra_config)
     app = oidc_provider_init_app(__name__, config=config)
     app.authn_response_queue.empty()
     request.instance.app = app
+
+
+@pytest.fixture
+def vetting_endpoint_client_config(request):
+    config = request.instance.app.config
+    credentials = ['{}:{}'.format(key, item['secret']) for key, item in config['SELEG_VETTING_APPS'].items()]
+    auth = base64.urlsafe_b64encode(credentials[0].encode('utf-8')).decode('utf-8')
+    return {
+        'content_type': 'application/json',
+        'headers': {
+            'Authorization': 'Basic {}'.format(auth)
+        }
+    }
