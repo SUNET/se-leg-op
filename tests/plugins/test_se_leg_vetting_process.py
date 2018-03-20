@@ -1,4 +1,5 @@
 import json
+import base64
 from urllib.parse import parse_qsl, urlparse
 
 import pytest
@@ -13,10 +14,6 @@ TEST_REDIRECT_URI = 'https://client.example.com/redirect_uri'
 
 TEST_USER_ID = 'user1'
 
-EXTRA_CONFIG = {
-    'PACKAGES': ['se_leg_op.plugins.se_leg_vetting_process']
-}
-
 
 @pytest.fixture
 def authn_request_args():
@@ -30,7 +27,7 @@ def authn_request_args():
     }
 
 
-@pytest.mark.usefixtures('inject_app', 'create_client_in_db')
+@pytest.mark.usefixtures('inject_app', 'create_client_in_db', 'vetting_endpoint_client_config')
 class TestVettingResultEndpoint(object):
     @pytest.fixture
     def create_client_in_db(self, request):
@@ -44,7 +41,7 @@ class TestVettingResultEndpoint(object):
         self.app.provider.clients = client_db
 
     @responses.activate
-    def test_vetting_endpoint(self, authn_request_args):
+    def test_vetting_endpoint(self, authn_request_args, vetting_endpoint_client_config):
         responses.add(responses.GET, TEST_REDIRECT_URI, status=200)
         nonce = authn_request_args['nonce']
         self.app.authn_requests[nonce] = authn_request_args
@@ -52,7 +49,7 @@ class TestVettingResultEndpoint(object):
         token = 'token'
         qrdata = '1' + json.dumps({'nonce': nonce, 'token': token})
         data = {'qrcode': qrdata, 'identity': TEST_USER_ID}
-        resp = self.app.test_client().post('/vetting-result', data=json.dumps(data), content_type='application/json')
+        resp = self.app.test_client().post('/vetting-result', data=json.dumps(data), **vetting_endpoint_client_config)
 
         assert resp.status_code == 200
         # verify the original authentication request has been handled
@@ -74,9 +71,9 @@ class TestVettingResultEndpoint(object):
         {'identity': TEST_USER_ID},  # missing 'qrcode'
         {'qrcode': 'nonce token'},  # missing 'identity'
     ])
-    def test_vetting_endpoint_with_missing_data(self, parameters):
+    def test_vetting_endpoint_with_missing_data(self, parameters, vetting_endpoint_client_config):
         resp = self.app.test_client().post('/vetting-result', data=json.dumps(parameters),
-                                           content_type='application/json')
+                                           **vetting_endpoint_client_config)
         assert resp.status_code == 400
 
     @pytest.mark.parametrize('qrdata', [
@@ -86,12 +83,12 @@ class TestVettingResultEndpoint(object):
         '1{"nonce": "nonce"}',  # missing 'token'
         '2{"token": "token", "nonce": "nonce"}'  # invalid qr version
     ])
-    def test_vetting_endpoint_with_invalid_qr_data(self, qrdata):
+    def test_vetting_endpoint_with_invalid_qr_data(self, qrdata, vetting_endpoint_client_config):
         data = {'qrcode': qrdata, 'identity': TEST_USER_ID}
-        resp = self.app.test_client().post('/vetting-result', data=json.dumps(data), content_type='application/json')
+        resp = self.app.test_client().post('/vetting-result', data=json.dumps(data), **vetting_endpoint_client_config)
         assert resp.status_code == 400
 
-    def test_unexpected_nonce(self):
+    def test_unexpected_nonce(self, vetting_endpoint_client_config):
         data = {'qrcode': 'unexpected token', 'identity': TEST_USER_ID}
-        resp = self.app.test_client().post('/vetting-result', data=json.dumps(data), content_type='application/json')
+        resp = self.app.test_client().post('/vetting-result', data=json.dumps(data), **vetting_endpoint_client_config)
         assert resp.status_code == 400

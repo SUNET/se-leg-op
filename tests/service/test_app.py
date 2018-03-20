@@ -17,7 +17,7 @@ TEST_NONCE = 'nonce'
 TEST_TOKEN = 'token'
 
 
-@pytest.mark.usefixtures('inject_app', 'create_client_in_db')
+@pytest.mark.usefixtures('inject_app', 'create_client_in_db', 'vetting_endpoint_client_config')
 class TestApp(object):
     def make_authentication_request(self, response_type):
         request_args = {
@@ -33,13 +33,13 @@ class TestApp(object):
         assert resp.status_code == 200
         assert len(responses.calls) == 0  # redirect_uri has not be called with error
 
-    def post_vetting_result(self):
+    def post_vetting_result(self, vetting_endpoint_client_config):
         vetting_result = {
             'qrcode': '1' + json.dumps({'nonce': TEST_NONCE, 'token': TEST_TOKEN}),
             'identity': TEST_USER_ID
         }
         resp = self.app.test_client().post('/vetting-result', data=json.dumps(vetting_result),
-                                           content_type='application/json')
+                                           **vetting_endpoint_client_config)
         assert resp.status_code == 200
 
         # force all authentication responses to be sent
@@ -103,12 +103,12 @@ class TestApp(object):
         self.app.provider.clients = client_db
 
     @responses.activate
-    def test_code_flow(self):
+    def test_code_flow(self, vetting_endpoint_client_config):
         responses.add(responses.GET, TEST_REDIRECT_URI, status=200)
 
         self.make_authentication_request('code')
         # approved vetting happens
-        self.post_vetting_result()
+        self.post_vetting_result(vetting_endpoint_client_config)
 
         authn_response = self.parse_authentication_response(responses.calls[0].request.url)
         token_resp = self.make_code_exchange_request(authn_response['code'])
@@ -122,12 +122,12 @@ class TestApp(object):
         assert userinfo['identity'] == TEST_USER_ID
 
     @responses.activate
-    def test_hybrid_flow(self):
+    def test_hybrid_flow(self, vetting_endpoint_client_config):
         responses.add(responses.GET, TEST_REDIRECT_URI, status=200)
 
         self.make_authentication_request('code id_token token')
         # approved vetting happens
-        self.post_vetting_result()
+        self.post_vetting_result(vetting_endpoint_client_config)
 
         authn_response = self.parse_authentication_response(responses.calls[0].request.url, fragment_encoded=True)
         token_resp = self.make_code_exchange_request(authn_response['code'])
