@@ -7,9 +7,10 @@ from oic.oic.message import AuthorizationRequest
 from pyop.util import should_fragment_encode
 from functools import wraps
 
-from ...service.views.oidc_provider import extra_userinfo
-from ...service.response_sender import deliver_response_task
-from ...service.vetting_process_tools import parse_opaque_data, InvalidOpaqueDataError, create_authentication_response
+from se_leg_op.service.views.oidc_provider import extra_userinfo
+from se_leg_op.service.response_sender import deliver_response_task
+from se_leg_op.service.vetting_process_tools import parse_opaque_data, InvalidOpaqueDataError
+from se_leg_op.service.vetting_process_tools import create_authentication_response, compute_credibility_score
 
 
 se_leg_vetting_process_views = Blueprint('se_leg_vetting_process', __name__, url_prefix='')
@@ -60,10 +61,6 @@ def vetting_result(ra_app):
         current_app.logger.error('Received invalid opaque data: {}'.format(e))
         return make_response(str(e), 400)
 
-    # Collect more metadata
-    metadata['opaque'] = qrcode
-    metadata['ra_app'] = ra_app
-
     auth_req_data = current_app.authn_requests.pop(qrdata['nonce'], None)
     if auth_req_data is None:
         current_app.logger.error('Received unknown nonce \'%s\'', qrdata['nonce'])
@@ -71,7 +68,17 @@ def vetting_result(ra_app):
 
     auth_req = AuthorizationRequest(**auth_req_data)
 
-    # TODO store necessary user info
+    # Collect more metadata
+    metadata['opaque'] = qrcode
+    metadata['ra_app'] = ra_app
+    # Compute credibility score from metadata
+    metadata['score'] = compute_credibility_score(qrdata['nonce'], metadata)
+    # Remove unneeded metadata
+    metadata.pop('expiry_date', None)
+    metadata.pop('ocular_validation', None)
+    metadata.pop('document_identifier', None)
+
+    # Save userinfo
     current_app.users[identity] = {'vetting_time': time.time(), 'identity': identity, 'metadata': metadata}
 
     authn_response = create_authentication_response(auth_req, identity, extra_userinfo)
