@@ -12,9 +12,9 @@ from pyop.userinfo import Userinfo
 from redis.client import StrictRedis
 from flask_registry import BlueprintAutoDiscoveryRegistry, ConfigurationRegistry, ExtensionRegistry
 from flask_registry import PackageRegistry, Registry
-import logging
 
 from ..storage import OpStorageWrapper
+from .middleware import LocalhostMiddleware
 
 import logging
 
@@ -106,6 +106,9 @@ def oidc_provider_init_app(name=None, config=None):
     # Init logging
     app = init_logging(app)
 
+    # Init middleware
+    app.wsgi_app = LocalhostMiddleware(app.wsgi_app, server_name=app.config['SERVER_NAME'])
+
     # Initialize registry for plugin handling
     r = Registry(app=app)
     r['packages'] = PackageRegistry(app)
@@ -117,8 +120,11 @@ def oidc_provider_init_app(name=None, config=None):
     app.users = OpStorageWrapper(app.config['DB_URI'], 'userinfo')
     app.authn_response_queue = init_authn_response_queue(app.config)
 
+    # Set up views
     from .views.oidc_provider import oidc_provider_views
     app.register_blueprint(oidc_provider_views)
+    from .views.status import status_views
+    app.register_blueprint(status_views)
 
     # Initialize the oidc_provider after views to be able to set correct urls
     app.provider = init_oidc_provider(app)

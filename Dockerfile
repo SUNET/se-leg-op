@@ -18,7 +18,9 @@ RUN apt-get -y install \
     net-tools \
     netcat \
     telnet \
-    traceroute
+    traceroute \
+    curl \
+    procps
 RUN apt-get -y install \
     python-virtualenv \
     git-core \
@@ -34,6 +36,9 @@ RUN adduser --system --group seleg
 # Add Dockerfile to the container as documentation
 COPY Dockerfile /Dockerfile
 
+# Add health check script that differs between op and op worker
+COPY health_check.sh /health_check.sh
+
 # revision.txt is dynamically updated by the CI for every build,
 # to ensure the statements below this point are executed every time
 COPY revision.txt /revision.txt
@@ -48,6 +53,8 @@ RUN cd /op/src && \
 # create log dirs
 RUN mkdir -p /var/log/op/plugins && chown -R seleg:seleg /var/log/op
 VOLUME /var/log/op
+
+HEALTHCHECK --interval=10s CMD /health_check.sh
 
 CMD ["start-stop-daemon", "--start", "-c", "seleg:seleg", "--exec", \
      "/op/env/bin/gunicorn", "--pidfile", "/var/run/se-leg-op.pid", \
