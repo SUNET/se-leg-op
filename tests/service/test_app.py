@@ -42,6 +42,9 @@ class TestApp(object):
                                            **vetting_endpoint_client_config)
         assert resp.status_code == 200
 
+        # Enqueue all delayed jobs
+        for job in self.app.authn_response_delay_queue.get_jobs():
+            self.app.authn_response_delay_queue.enqueue_job(job)
         # force all authentication responses to be sent
         worker = SimpleWorker([self.app.authn_response_queue], connection=self.app.authn_response_queue.connection)
         worker.work(burst=True)

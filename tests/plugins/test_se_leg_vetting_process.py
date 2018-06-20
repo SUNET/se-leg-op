@@ -56,6 +56,9 @@ class TestVettingResultEndpoint(object):
         assert nonce not in self.app.authn_requests
         assert self.app.users[TEST_USER_ID]['identity'] == TEST_USER_ID
 
+        # Enqueue all delayed jobs
+        for job in self.app.authn_response_delay_queue.get_jobs():
+            self.app.authn_response_delay_queue.enqueue_job(job)
         # force sending response from message queue from http://python-rq.org/docs/testing/
         worker = SimpleWorker([self.app.authn_response_queue], connection=self.app.authn_response_queue.connection)
         worker.work(burst=True)

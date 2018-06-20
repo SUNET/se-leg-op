@@ -12,6 +12,7 @@ from pyop.userinfo import Userinfo
 from redis.client import StrictRedis
 from flask_registry import BlueprintAutoDiscoveryRegistry, ConfigurationRegistry, ExtensionRegistry
 from flask_registry import PackageRegistry, Registry
+from rq_scheduler import Scheduler
 
 from ..storage import OpStorageWrapper
 from .middleware import LocalhostMiddleware
@@ -72,8 +73,8 @@ def init_oidc_provider(app):
     return provider
 
 
-def init_authn_response_queue(config):
-    if config.get('REDIS_SENTINEL_HOSTS') and config.get('REDIS_SENTINEL_SERVICE_NAME'):
+def init_redis_connection(app):
+    if app.config.get('REDIS_SENTINEL_HOSTS') and app.config.get('REDIS_SENTINEL_SERVICE_NAME'):
         _port = config['REDIS_PORT']
         _hosts = config['REDIS_SENTINEL_HOSTS']
         _name = config['REDIS_SENTINEL_SERVICE_NAME']
@@ -81,10 +82,9 @@ def init_authn_response_queue(config):
         manager = redis.sentinel.Sentinel(host_port, socket_timeout=0.1)
         pool = redis.sentinel.SentinelConnectionPool(_name, manager)
     else:
-        pool = redis.ConnectionPool.from_url(config['REDIS_URI'])
-
-    connection = StrictRedis(connection_pool=pool)
-    return rq.Queue('authn_responses', connection=connection)
+        pool = redis.ConnectionPool.from_url(app.config['REDIS_URI'])
+    app.redis = StrictRedis(connection_pool=pool)
+    return app
 
 
 def init_logging(app):
@@ -116,9 +116,14 @@ def oidc_provider_init_app(name=None, config=None):
     r['config'] = ConfigurationRegistry(app)
     r['blueprints'] = BlueprintAutoDiscoveryRegistry(app=app)
 
+    # Init dbs
     app.authn_requests = OpStorageWrapper(app.config['DB_URI'], 'authn_requests')
     app.users = OpStorageWrapper(app.config['DB_URI'], 'userinfo')
-    app.authn_response_queue = init_authn_response_queue(app.config)
+
+    # Init queues
+    app = init_redis_connection(app)
+    app.authn_response_queue = rq.Queue('authn_responses', connection=app.redis)
+    app.authn_response_delay_queue = Scheduler(queue_name='authn_responses', connection=app.redis)
 
     # Set up views
     from .views.oidc_provider import oidc_provider_views

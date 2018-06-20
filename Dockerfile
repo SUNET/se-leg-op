@@ -36,8 +36,14 @@ RUN adduser --system --group seleg
 # Add Dockerfile to the container as documentation
 COPY Dockerfile /Dockerfile
 
-# Add health check script that differs between op and op worker
-COPY health_check.sh /health_check.sh
+# Add health check script for op
+COPY docker/health_check.sh /health_check.sh
+
+# Add start script for rq worker
+COPY docker/start_worker.sh /start_worker.sh
+
+# Add start script for delay worker
+COPY docker/start_scheduler.sh /start_scheduler.sh
 
 # revision.txt is dynamically updated by the CI for every build,
 # to ensure the statements below this point are executed every time
