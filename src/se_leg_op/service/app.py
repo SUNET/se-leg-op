@@ -72,7 +72,7 @@ def init_oidc_provider(app):
     return provider
 
 
-def init_authn_response_queue(config):
+def get_redis_pool(config):
     if config.get('REDIS_SENTINEL_HOSTS') and config.get('REDIS_SENTINEL_SERVICE_NAME'):
         _port = config['REDIS_PORT']
         _hosts = config['REDIS_SENTINEL_HOSTS']
@@ -82,9 +82,21 @@ def init_authn_response_queue(config):
         pool = redis.sentinel.SentinelConnectionPool(_name, manager)
     else:
         pool = redis.ConnectionPool.from_url(config['REDIS_URI'])
+    return pool
 
+
+def init_authn_response_queue(app):
+    pool = get_redis_pool(app.config)
     connection = StrictRedis(connection_pool=pool)
-    return rq.Queue('authn_responses', connection=connection)
+    app.authn_response_queue = rq.Queue('authn_responses', connection=connection)
+    return app
+
+
+def init_delay_queue(app):
+    pool = get_redis_pool(app.config)
+    connection = StrictRedis(connection_pool=pool)
+    app.delay_queue = DelayedJob(connection)
+    return app
 
 
 def init_logging(app):
@@ -116,9 +128,13 @@ def oidc_provider_init_app(name=None, config=None):
     r['config'] = ConfigurationRegistry(app)
     r['blueprints'] = BlueprintAutoDiscoveryRegistry(app=app)
 
+    # Init dbs
     app.authn_requests = OpStorageWrapper(app.config['DB_URI'], 'authn_requests')
     app.users = OpStorageWrapper(app.config['DB_URI'], 'userinfo')
-    app.authn_response_queue = init_authn_response_queue(app.config)
+
+    # Init queues
+    app = init_authn_response_queue(app)
+    app = init_delay_queue(app)
 
     # Set up views
     from .views.oidc_provider import oidc_provider_views
