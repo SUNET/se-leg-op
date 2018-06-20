@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import time
+from datetime import timedelta
 from flask import Blueprint, current_app, request, abort
 from flask.helpers import make_response
 from oic.oic.message import AuthorizationRequest
@@ -84,8 +85,11 @@ def vetting_result(ra_app):
     authn_response = create_authentication_response(auth_req, identity, extra_userinfo)
     response_url = authn_response.request(auth_req['redirect_uri'], should_fragment_encode(auth_req))
     headers = {'Authorization': 'Bearer {}'.format(qrdata['token'])}
-    current_app.authn_response_queue.enqueue(deliver_response_task, response_url, headers=headers)
-    current_app.logger.info('Vetting result from {} delivered as authn response to {}'.format(ra_app, response_url))
+    seconds_delay = current_app.config['SELEG_AUTHN_RESPONSE_DELAY']
+    current_app.authn_response_delay_queue.enqueue_in(timedelta(seconds=seconds_delay),
+                                                      deliver_response_task, response_url, headers=headers)
+    current_app.logger.info('Vetting result from {} delivering authn response to {} in {} seconds'.format(
+        ra_app, response_url, seconds_delay))
     return make_response('OK', 200)
 
 

@@ -42,6 +42,9 @@ COPY docker/health_check.sh /health_check.sh
 # Add start script for rq worker
 COPY docker/start_worker.sh /start_worker.sh
 
+# Add start script for delay worker
+COPY docker/start_scheduler.sh /start_scheduler.sh
+
 # revision.txt is dynamically updated by the CI for every build,
 # to ensure the statements below this point are executed every time
 COPY revision.txt /revision.txt
