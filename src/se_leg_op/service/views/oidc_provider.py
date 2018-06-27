@@ -8,8 +8,8 @@ from pyop.access_token import AccessToken, BearerTokenError
 from pyop.exceptions import InvalidAuthenticationRequest, InvalidAccessToken, InvalidClientAuthentication, OAuthError
 from pyop.util import should_fragment_encode
 
-from ..response_sender import deliver_response_task
-from ..vetting_process_tools import create_authentication_response
+from se_leg_op.service.response_sender import deliver_response_task
+from se_leg_op.service.vetting_process_tools import create_authentication_response
 
 oidc_provider_views = Blueprint('oidc_provider', __name__, url_prefix='')
 
