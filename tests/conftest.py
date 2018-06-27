@@ -168,7 +168,6 @@ def inject_app(request, tmpdir, mongodb_instance, redis_instance, config_envvar)
     os.chdir(str(tmpdir))
     os.environ[SE_LEG_PROVIDER_SETTINGS_ENVVAR] = config_envvar
     config = {
-        '_mongodb': mongodb_instance,
         'DB_URI': mongodb_instance.get_uri(),
         'REDIS_URI': redis_instance.get_uri(),
         'PREFERRED_URL_SCHEME': 'https',
