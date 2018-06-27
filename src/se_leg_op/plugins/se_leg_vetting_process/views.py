@@ -4,14 +4,11 @@ import time
 from datetime import timedelta
 from flask import Blueprint, current_app, request, abort
 from flask.helpers import make_response
-from oic.oic.message import AuthorizationRequest
-from pyop.util import should_fragment_encode
 from functools import wraps
 
-from se_leg_op.service.views.oidc_provider import extra_userinfo
-from se_leg_op.service.response_sender import deliver_response_task
 from se_leg_op.service.vetting_process_tools import parse_opaque_data, InvalidOpaqueDataError
-from se_leg_op.service.vetting_process_tools import create_authentication_response, compute_credibility_score
+from se_leg_op.service.vetting_process_tools import compute_credibility_score
+from se_leg_op.plugins.se_leg_vetting_process.delayed_response_sender import delayed_authn_response_task
 
 
 se_leg_vetting_process_views = Blueprint('se_leg_vetting_process', __name__, url_prefix='')
@@ -67,8 +64,6 @@ def vetting_result(ra_app):
         current_app.logger.error('Received unknown nonce \'%s\'', qrdata['nonce'])
         return make_response('Unknown nonce', 400)
 
-    auth_req = AuthorizationRequest(**auth_req_data)
-
     # Collect more metadata
     metadata['opaque'] = qrcode
     metadata['ra_app'] = ra_app
@@ -82,14 +77,22 @@ def vetting_result(ra_app):
     # Save userinfo
     current_app.users[identity] = {'vetting_time': time.time(), 'identity': identity, 'metadata': metadata}
 
-    authn_response = create_authentication_response(auth_req, identity, extra_userinfo)
-    response_url = authn_response.request(auth_req['redirect_uri'], should_fragment_encode(auth_req))
-    headers = {'Authorization': 'Bearer {}'.format(qrdata['token'])}
+    # Need a minimal app config to work during tests...
+    # TODO: Remove the minimal config
+    app_config = {
+        'DB_URI': current_app.config['DB_URI'],
+        'REDIS_URI': current_app.config['REDIS_URI'],
+        'PREFERRED_URL_SCHEME': current_app.config['PREFERRED_URL_SCHEME'],
+    }
+
+    # Enqueue the delayed authn response
     seconds_delay = current_app.config['SELEG_AUTHN_RESPONSE_DELAY']
-    current_app.authn_response_delay_queue.enqueue_in(timedelta(seconds=seconds_delay),
-                                                      deliver_response_task, response_url, headers=headers)
-    current_app.logger.info('Vetting result from {} delivering authn response to {} in {} seconds'.format(
-        ra_app, response_url, seconds_delay))
+    current_app.authn_response_delay_queue.enqueue_in(timedelta(seconds=seconds_delay), delayed_authn_response_task,
+                                                      auth_req_data, qrdata['token'], identity,
+                                                      app_config)
+
+    current_app.logger.info('Vetting result from {}. Delivering authn response in {} seconds'.format(
+        ra_app, seconds_delay))
     return make_response('OK', 200)
 
 
