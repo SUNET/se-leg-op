@@ -47,7 +47,7 @@ COPY docker/start_scheduler.sh /start_scheduler.sh
 
 # revision.txt is dynamically updated by the CI for every build,
 # to ensure the statements below this point are executed every time
-COPY revision.txt /revision.txt
+COPY docker/revision.txt /revision.txt
 
 RUN mkdir -p /op && virtualenv -p python3 /op/env
 COPY . /op/src
