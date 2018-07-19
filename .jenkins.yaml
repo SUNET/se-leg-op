@@ -1,4 +1,4 @@
-builders: ~
+disabled: true
 
 extra_jobs:
   - name: se-leg-op-docker
