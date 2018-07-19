@@ -1,0 +1,12 @@
+builders: ~
+
+extra_jobs:
+  - name: se-leg-op-docker
+    builders:
+      - docker
+    docker_name: se-leg/op
+    managed_scripts:
+      - docker_build_prep.sh
+      - docker_tag.sh
+    triggers:
+      cron: "@weekly"
