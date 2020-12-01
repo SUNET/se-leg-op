@@ -11,3 +11,5 @@ Flask-Registry==0.2.0
 pyjwkest
 --extra-index-url https://pypi.sunet.se/simple/
 mitek-mobile-verify
+
+oic>=1.2.1 # not directly required, pinned by Snyk to avoid a vulnerability
