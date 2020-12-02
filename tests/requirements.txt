@@ -1,3 +1,3 @@
 pytest
 responses==0.5.1
-oic
+oic>=1.2.1
