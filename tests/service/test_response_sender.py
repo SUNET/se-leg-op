@@ -12,7 +12,7 @@ from se_leg_op.service.response_sender import deliver_response_task
 
 @pytest.fixture
 def message_queue():
-    return rq.Queue(async=False, connection=Mock(spec=StrictRedis))
+    return rq.Queue(connection=Mock(spec=StrictRedis))
 
 
 class TestDeliverResponse(object):
