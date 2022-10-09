@@ -1,7 +1,7 @@
 setuptools>18.5  # cryptography requires setuptools 18.5 or newer
 pyop>=2.0.4,<2.1.0
 Flask>=0.12.2,<0.13
-requests==2.9.1
+requests==2.20
 certifi
 pymongo==3.2.2
 redis==2.10.5
